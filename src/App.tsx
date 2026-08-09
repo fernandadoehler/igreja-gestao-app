@@ -5805,31 +5805,31 @@ function SidebarContent({
 }) {
   return (
     <>
-      <nav className="flex-1 px-4 py-6 space-y-8 overflow-y-auto">
+      <nav className="flex-1 p-2.5 space-y-0.5 overflow-y-auto">
         {NAV_ITEMS.map(item => {
           const active = module === item.id;
           return (
             <button key={item.id}
               onClick={() => { setModule(item.id); onNavigate?.(); }}
-              className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-base font-bold transition-all ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 active
-                  ? "bg-sidebar-primary/15 text-sidebar-primary border border-sidebar-primary/30"
+                  ? "bg-sidebar-primary/15 text-sidebar-primary border border-sidebar-primary/20"
                   : "text-[#8096A2] hover:text-sidebar-foreground hover:bg-white/5 border border-transparent"
               }`}>
-              <item.icon size={20} className="flex-shrink-0" />
+              <item.icon size={16} className="flex-shrink-0" />
               {showLabels && <span className="truncate">{item.label}</span>}
             </button>
           );
         })}
       </nav>
 
-      <div className="p-5 border-t border-sidebar-border">
+      <div className="p-3 border-t border-sidebar-border">
         <div className="flex items-center gap-3 px-1">
-          <Avt name="Carlos Mendes" size="lg" />
+          <Avt name="Carlos Mendes" size="sm" />
           {showLabels && (
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold text-sidebar-foreground truncate">Rev. Carlos Mendes</div>
-              <div className="text-sm text-[#8096A2]">Pastor Principal</div>
+              <div className="text-xs font-semibold text-sidebar-foreground truncate">Rev. Carlos Mendes</div>
+              <div className="text-xs text-[#8096A2]">Pastor Principal</div>
             </div>
           )}
         </div>
@@ -5989,10 +5989,10 @@ export default function App() {
       `}</style>
 
       {/* ── Desktop sidebar (hidden on mobile) ── */}
-      <aside className={`hidden md:flex ${sidebarOpen ? "w-72" : "w-16"} flex-shrink-0 bg-sidebar border-r border-sidebar-border flex-col transition-all duration-300 overflow-hidden`}>
-        <div className="border-b border-sidebar-border flex items-center px-6 py-7">
+      <aside className={`hidden md:flex ${sidebarOpen ? "w-60" : "w-16"} flex-shrink-0 bg-sidebar border-r border-sidebar-border flex-col transition-all duration-300 overflow-hidden`}>
+        <div className="border-b border-sidebar-border flex items-center px-4 py-4">
           {sidebarOpen ? (
-            <LogoHorizontal height={30} gradId="idetechHorGradDesktop" />
+            <LogoHorizontal height={26} gradId="idetechHorGradDesktop" />
           ) : (
             <div className="mx-auto">
               <LogoIcon size={28} gradId="idetechIconGradDesktop" />
