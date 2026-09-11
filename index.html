@@ -422,6 +422,20 @@ const MEMBERS = [
     { id: 19, name: "Vinícius Andrade", phone: "(11) 7 6666-0019", email: "vinicius.andrade@email.com", birthDate: "1998-08-30", joinDate: monthsAgoISO(3, 8), status: "Membro", ministry: "Recepção" },
     { id: 20, name: "Isabela Martins", phone: "", email: "isabela.martins@email.com", joinDate: monthsAgoISO(4, 27), status: "Visitante" },
     { id: 21, name: "Renato Souza", phone: "(11) 7 4444-0021", email: "renato.souza@email.com", birthDate: "1994-12-01", joinDate: monthsAgoISO(5, 3), status: "Visitante" },
+    // Crianças matriculadas na EBD — pessoas como qualquer outra no cadastro
+    // central (não é um cadastro paralelo), cada uma vinculada a um responsável
+    // (guardianId) que já existe no cadastro de pessoas. O telefone/e-mail
+    // registrados são os do responsável, já que a criança ainda não tem
+    // contato próprio — por isso não aparecem como "cadastro incompleto".
+    { id: 22, name: "Heloísa Martins", phone: "(11) 9 0000-0010", email: "daniel.martins@email.com", birthDate: "2024-02-10", joinDate: monthsAgoISO(2, 3), status: "Ativo", guardianId: 10 },
+    { id: 23, name: "Théo Andrade", phone: "(11) 7 6666-0019", email: "vinicius.andrade@email.com", birthDate: "2023-07-19", joinDate: monthsAgoISO(4, 12), status: "Ativo", guardianId: 19 },
+    { id: 24, name: "Davi Oliveira", phone: "(11) 9 6666-0004", email: "pedro.oliveira@email.com", birthDate: "2018-09-03", joinDate: "2024-02-04", status: "Ativo", guardianId: 4 },
+    { id: 25, name: "Alice Souza", phone: "(11) 9 2222-0008", email: "rafael.souza@email.com", birthDate: "2017-11-22", joinDate: "2023-08-06", status: "Ativo", guardianId: 8 },
+    { id: 26, name: "Miguel Barbosa", phone: "(11) 8 6666-0014", email: "thiago.barbosa@email.com", birthDate: "2016-04-14", joinDate: "2022-05-01", status: "Ativo", guardianId: 14 },
+    { id: 27, name: "Laura Gomes", phone: "(11) 8 5555-0015", email: "priscila.gomes@email.com", birthDate: "2019-01-30", joinDate: "2024-09-15", status: "Ativo", guardianId: 15 },
+    { id: 28, name: "Enzo Martins", phone: "(11) 9 0000-0010", email: "daniel.martins@email.com", birthDate: "2013-06-08", joinDate: "2019-11-03", status: "Ativo", guardianId: 10 },
+    { id: 29, name: "Yasmin Costa", phone: "(11) 9 5555-0005", email: "ana.costa@email.com", birthDate: "2012-12-01", joinDate: "2019-03-10", status: "Ativo", guardianId: 5 },
+    { id: 30, name: "Manuela Freitas", phone: "(11) 7 9999-0016", email: "familia.freitas@email.com", birthDate: "2011-03-17", joinDate: monthsAgoISO(0, 8), status: "Visitante", guardianId: 16 },
 ];
 // Regra objetiva de "cadastro incompleto": faltam telefone ou e-mail — os
 // únicos dois meios de contato da plataforma. Não depende de interpretação;
@@ -641,6 +655,7 @@ const NAV_ITEMS = [
     { id: "calendar", label: "Calendário", icon: Calendar },
     { id: "kanban", label: "Kanban", icon: LayoutGrid },
     { id: "scales", label: "Escalas", icon: ClipboardList },
+    { id: "ebd", label: "EBD", icon: BookOpen },
     { id: "cadastros", label: "Cadastros", icon: UserPlus },
     { id: "profiles", label: "Perfis de acesso", icon: Shield },
     { id: "settings", label: "Configurações", icon: Settings },
@@ -649,7 +664,7 @@ const MODULE_TITLES = {
     dashboard: "Dashboard", members: "Gestão de Membros",
     ministries: "Ministérios", teams: "Equipes",
     calendar: "Calendário", kanban: "Kanban",
-    scales: "Escalas", cadastros: "Cadastros", profiles: "Perfis de acesso", settings: "Configurações",
+    scales: "Escalas", ebd: "EBD — Escola Bíblica Dominical", cadastros: "Cadastros", profiles: "Perfis de acesso", settings: "Configurações",
 };
 // ─── UI Primitives ────────────────────────────────────────────────────────────
 const Badge = ({ label, cls = "" }) => (React.createElement("span", { className: `inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border font-mono leading-none ${cls}` }, label));
@@ -6224,6 +6239,1552 @@ function Scales() {
                     React.createElement("button", { className: "ml-auto text-muted-foreground hover:text-[#10b981] transition-colors" },
                         React.createElement(Check, { size: 12 }))))))))))))))));
 }
+// ── Datas relativas a "agora" (mesmo princípio evergreen usado no restante
+// do app: os domingos recentes/futuros são sempre calculados a partir de hoje,
+// nunca fixos, para a EBD nunca parecer "desatualizada"). ──────────────────
+const nextSundayISO = (weeksAhead = 0) => {
+    const d = new Date(now);
+    const diff = (7 - d.getDay()) % 7;
+    d.setDate(d.getDate() + diff + weeksAhead * 7);
+    return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+};
+const lastSundaysISO = (n) => {
+    const diffToLast = now.getDay();
+    const out = [];
+    for (let i = n - 1; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - diffToLast - i * 7);
+        out.push(`${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`);
+    }
+    return out;
+};
+const ebdAge = (birthDate) => {
+    if (!birthDate)
+        return null;
+    const [by, bm, bd] = birthDate.split("-").map(Number);
+    let age = now.getFullYear() - by;
+    if (M < bm || (M === bm && now.getDate() < bd))
+        age--;
+    return age;
+};
+// ── Configurações da EBD (pensadas para virar telas editáveis no futuro —
+// hoje já não são fixas no código, e sim listas centralizadas aqui) ─────────
+const EBD_CATEGORIES = ["Berçário", "Crianças", "Juniores", "Adolescentes", "Jovens", "Adultos", "Casais", "Terceira Idade"];
+const EBD_ROOMS = ["Berçário", "Sala 01", "Sala 02", "Sala 03", "Sala 04", "Sala 05", "Salão"];
+const EBD_ABSENCE_REASONS = ["Viagem", "Doença", "Trabalho", "Compromisso", "Sem justificativa", "Outro"];
+// ── Turmas — vinculadas à equipe "Escola Bíblica" (team id 10) ─────────────
+const EBD_CLASSES = [
+    { id: "berc", name: "Berçário", category: "Berçário", room: "Berçário", time: "09:00", teacherId: 9, assistantIds: [7], capacity: 10, status: "Ativa", color: "#f59e0b", description: "Cuidado e primeiras histórias bíblicas para bebês de 0 a 2 anos." },
+    { id: "crianca", name: "Crianças", category: "Crianças", room: "Sala 01", time: "09:00", teacherId: 5, assistantIds: [], capacity: 20, status: "Ativa", color: "#0ea5e9", description: "Ensino bíblico lúdico para crianças de 3 a 10 anos." },
+    { id: "junior", name: "Juniores", category: "Juniores", room: "Sala 02", time: "09:00", teacherId: undefined, assistantIds: [13], capacity: 15, status: "Ativa", color: "#8b5cf6", description: "Turma de transição para pré-adolescentes de 11 a 14 anos." },
+    { id: "jovens", name: "Jovens", category: "Jovens", room: "Sala 04", time: "09:00", teacherId: 12, assistantIds: [7], capacity: 25, status: "Ativa", color: "#06b6d4", description: "Estudo bíblico voltado para jovens e novos convertidos." },
+    { id: "adultos", name: "Adultos", category: "Adultos", room: "Sala 03", time: "09:00", teacherId: 3, assistantIds: [2], capacity: 40, status: "Ativa", color: "#0284c7", description: "Estudo sistemático da Palavra para a turma de adultos." },
+];
+// ── Matrículas (Pessoa ↔ Turma) — cada uma reaproveita um Member já existente
+const EBD_ENROLLMENTS = [
+    { id: "en1", memberId: 22, classId: "berc", joinDate: "2024-04-14", status: "Ativo", history: [{ date: "2024-04-14", type: "Entrada", toClassId: "berc" }] },
+    { id: "en2", memberId: 23, classId: "berc", joinDate: "2023-09-17", status: "Ativo", history: [{ date: "2023-09-17", type: "Entrada", toClassId: "berc" }] },
+    { id: "en3", memberId: 24, classId: "crianca", joinDate: "2024-03-03", status: "Ativo", history: [{ date: "2024-03-03", type: "Entrada", toClassId: "crianca" }] },
+    { id: "en4", memberId: 25, classId: "crianca", joinDate: "2023-08-13", status: "Ativo",
+        guardianPhone: "(11) 9 2222-0008", authorized: false, notes: "Autorização de saída com terceiros ainda não entregue pelos pais.",
+        history: [{ date: "2023-08-13", type: "Entrada", toClassId: "crianca" }] },
+    { id: "en5", memberId: 26, classId: "crianca", joinDate: "2022-05-08", status: "Ativo", history: [{ date: "2022-05-08", type: "Entrada", toClassId: "crianca" }] },
+    { id: "en6", memberId: 27, classId: "crianca", joinDate: "2024-09-22", status: "Ativo", history: [{ date: "2024-09-22", type: "Entrada", toClassId: "crianca" }] },
+    { id: "en7", memberId: 28, classId: "junior", joinDate: "2019-11-10", status: "Ativo", history: [{ date: "2019-11-10", type: "Entrada", toClassId: "junior" }] },
+    { id: "en8", memberId: 29, classId: "junior", joinDate: "2019-03-17", status: "Ativo",
+        notes: "Completou a faixa etária da turma de Crianças e foi remanejada para Juniores.",
+        history: [
+            { date: "2019-03-17", type: "Entrada", toClassId: "crianca" },
+            { date: monthsAgoISO(1, 12), type: "Transferência", fromClassId: "crianca", toClassId: "junior", note: "Mudança de faixa etária" },
+        ] },
+    { id: "en9", memberId: 30, classId: null, joinDate: monthsAgoISO(0, 9), status: "Aguardando turma", notes: "Nova matrícula — aguardando abertura de vaga em Juniores.",
+        history: [{ date: monthsAgoISO(0, 9), type: "Entrada", toClassId: null }] },
+    { id: "en10", memberId: 16, classId: "jovens", joinDate: monthsAgoISO(0, 6), status: "Ativo", history: [{ date: monthsAgoISO(0, 6), type: "Entrada", toClassId: "jovens" }] },
+    { id: "en11", memberId: 17, classId: "jovens", joinDate: monthsAgoISO(1, 23), status: "Ativo", history: [{ date: monthsAgoISO(1, 23), type: "Entrada", toClassId: "jovens" }] },
+    { id: "en12", memberId: 18, classId: "jovens", joinDate: monthsAgoISO(2, 15), status: "Ativo", history: [{ date: monthsAgoISO(2, 15), type: "Entrada", toClassId: "jovens" }] },
+    { id: "en13", memberId: 19, classId: "jovens", joinDate: monthsAgoISO(3, 9), status: "Ativo", history: [{ date: monthsAgoISO(3, 9), type: "Entrada", toClassId: "jovens" }] },
+    { id: "en14", memberId: 20, classId: "jovens", joinDate: monthsAgoISO(4, 28), status: "Ativo", history: [{ date: monthsAgoISO(4, 28), type: "Entrada", toClassId: "jovens" }] },
+    { id: "en15", memberId: 21, classId: "jovens", joinDate: monthsAgoISO(5, 4), status: "Ativo", history: [{ date: monthsAgoISO(5, 4), type: "Entrada", toClassId: "jovens" }] },
+    { id: "en16", memberId: 8, classId: "adultos", joinDate: "2015-02-01", status: "Ativo", history: [{ date: "2015-02-01", type: "Entrada", toClassId: "adultos" }] },
+    { id: "en17", memberId: 14, classId: "adultos", joinDate: "2006-06-01", status: "Ativo", history: [{ date: "2006-06-01", type: "Entrada", toClassId: "adultos" }] },
+    { id: "en18", memberId: 15, classId: "adultos", joinDate: "2018-07-01", status: "Ativo", history: [{ date: "2018-07-01", type: "Entrada", toClassId: "adultos" }] },
+    { id: "en19", memberId: 10, classId: "adultos", joinDate: "2014-01-01", status: "Ativo", history: [{ date: "2014-01-01", type: "Entrada", toClassId: "adultos" }] },
+    { id: "en20", memberId: 11, classId: "adultos", joinDate: "2011-03-01", status: "Ativo", history: [{ date: "2011-03-01", type: "Entrada", toClassId: "adultos" }] },
+];
+// ── Frequência — últimos 6 domingos, por turma. Cada aluno só recebe
+// registro a partir da data em que já estava matriculado naquela turma
+// (ex.: Yasmin só tem chamada em Juniores a partir da transferência), então
+// nenhum histórico é fabricado para antes da matrícula real. ───────────────
+const EBD_SUNDAYS = lastSundaysISO(6);
+const ebdSession = (id, classId, dateIdx, records) => ({ id, classId, date: EBD_SUNDAYS[dateIdx], records });
+const EBD_ATTENDANCE_INIT = [
+    // Berçário — Heloísa(22), Théo(23)
+    ...EBD_SUNDAYS.map((_, i) => ebdSession(`berc-${i}`, "berc", i, [
+        { memberId: 22, present: true },
+        { memberId: 23, present: i !== 3, ...(i === 3 ? { reason: "Doença" } : {}) },
+    ])),
+    // Crianças — Davi(24) sempre presente, Alice(25) ausente nos 3 últimos, Miguel(26) 1 falta, Laura(27) 1 falta
+    ...EBD_SUNDAYS.map((_, i) => ebdSession(`crianca-${i}`, "crianca", i, [
+        { memberId: 24, present: true },
+        { memberId: 25, present: i < 3, ...(i >= 3 ? { reason: "Sem justificativa" } : {}) },
+        { memberId: 26, present: i !== 1, ...(i === 1 ? { reason: "Viagem" } : {}) },
+        { memberId: 27, present: i !== 2, ...(i === 2 ? { reason: "Doença" } : {}) },
+    ])),
+    // Juniores — Enzo(28) todas as sessões, Yasmin(29) só desde a transferência (últimas 2)
+    ...EBD_SUNDAYS.map((_, i) => ebdSession(`junior-${i}`, "junior", i, [
+        { memberId: 28, present: i !== 4, ...(i === 4 ? { reason: "Sem justificativa" } : {}) },
+        ...(i >= 4 ? [{ memberId: 29, present: true }] : []),
+    ])),
+    // Jovens — Vinícius(19) e Sofia(18) quase perfeitos, Renato(21) com 3 faltas seguidas recentes
+    ...EBD_SUNDAYS.map((_, i) => ebdSession(`jovens-${i}`, "jovens", i, [
+        { memberId: 16, present: i !== 3, ...(i === 3 ? { reason: "Trabalho" } : {}) },
+        { memberId: 17, present: i !== 1, ...(i === 1 ? { reason: "Viagem" } : {}) },
+        { memberId: 18, present: i !== 5, ...(i === 5 ? { reason: "Compromisso" } : {}) },
+        { memberId: 19, present: true },
+        { memberId: 20, present: i !== 1 && i !== 3, ...(i === 1 ? { reason: "Doença" } : i === 3 ? { reason: "Compromisso" } : {}) },
+        { memberId: 21, present: i === 0 || i === 2, ...(i === 0 ? { reason: "Trabalho" } : (i !== 2 ? { reason: "Sem justificativa" } : {})) },
+    ])),
+    // Adultos — quase todos presentes, com uma falta pontual cada
+    ...EBD_SUNDAYS.map((_, i) => ebdSession(`adultos-${i}`, "adultos", i, [
+        { memberId: 8, present: i !== 2, ...(i === 2 ? { reason: "Viagem" } : {}) },
+        { memberId: 14, present: i !== 0, ...(i === 0 ? { reason: "Compromisso" } : {}) },
+        { memberId: 15, present: true },
+        { memberId: 10, present: i !== 4, ...(i === 4 ? { reason: "Trabalho" } : {}) },
+        { memberId: 11, present: true },
+    ])),
+];
+// ── Conteúdos — trimestre corrente com aulas (algumas já realizadas, uma
+// próxima e uma ainda planejada) ────────────────────────────────────────────
+const EBD_TERMS = [
+    {
+        id: "term-3-2026", title: "3º Trimestre — 2026", theme: "Fundamentos da Fé",
+        startDate: lastSundaysISO(8)[0], endDate: nextSundayISO(6),
+        lessons: [
+            { id: "l1", termId: "term-3-2026", number: 1, title: "Introdução", date: EBD_SUNDAYS[3],
+                bibleText: "2 Timóteo 3:16-17", objectives: "Apresentar a Bíblia como fundamento da fé cristã.",
+                content: "A inspiração e a autoridade das Escrituras. Como a Bíblia se organiza (Antigo e Novo Testamento) e por que ela é a base de tudo o que ensinamos na EBD.",
+                materials: [{ id: "m1", name: "Slides — Aula 01", type: "Apresentação" }, { id: "m2", name: "Roteiro do professor", type: "PDF" }],
+                activities: "Dinâmica em grupo: cada aluno compartilha um versículo que já marcou sua vida.",
+                discussionQuestions: ["Por que a Bíblia é diferente de qualquer outro livro?", "O que significa dizer que as Escrituras são 'inspiradas por Deus'?"],
+                status: "Realizada" },
+            { id: "l2", termId: "term-3-2026", number: 2, title: "Aula 02 — Quem é Deus", date: EBD_SUNDAYS[4],
+                bibleText: "Êxodo 3:13-14", objectives: "Compreender os atributos de Deus.",
+                content: "Deus como Criador, Trino e Soberano. A diferença entre o que podemos conhecer de Deus pela criação e o que só conhecemos pela revelação.",
+                materials: [{ id: "m3", name: "Slides — Aula 02", type: "Apresentação" }],
+                discussionQuestions: ["Qual atributo de Deus é mais difícil de entender para você?"],
+                status: "Realizada" },
+            { id: "l3", termId: "term-3-2026", number: 3, title: "Aula 03 — A Pessoa de Jesus", date: nextSundayISO(0),
+                bibleText: "João 1:1-14", objectives: "Apresentar Jesus como plenamente Deus e plenamente homem.",
+                content: "A encarnação, a vida, morte e ressurreição de Jesus como centro da fé cristã.",
+                materials: [{ id: "m4", name: "Slides — Aula 03", type: "Apresentação" }, { id: "m5", name: "Vídeo de apoio", type: "Vídeo", url: "https://example.com/aula-03" }],
+                discussionQuestions: ["Por que a divindade de Jesus é essencial para o Evangelho?", "O que a ressurreição muda na nossa fé?"],
+                status: "Próxima" },
+            { id: "l4", termId: "term-3-2026", number: 4, title: "Aula 04 — O Espírito Santo", date: nextSundayISO(1),
+                objectives: "Introduzir a pessoa e a obra do Espírito Santo.",
+                materials: [], discussionQuestions: [], status: "Planejada" },
+        ],
+    },
+];
+// ── Escalas de professores — reaproveita a mesma lógica de conflito do
+// módulo de Escalas: duas atribuições da mesma pessoa no mesmo dia/horário
+// (aqui ou no módulo geral de Escalas) são um conflito real, não um alerta
+// fabricado. ────────────────────────────────────────────────────────────────
+const EBD_SCALES_INIT = [
+    {
+        id: "esc1", date: nextSundayISO(0), time: "09:00",
+        assignments: [
+            { classId: "berc", role: "Professor", memberId: 9 }, { classId: "berc", role: "Auxiliar", memberId: 7 },
+            { classId: "crianca", role: "Professor", memberId: 5 },
+            { classId: "junior", role: "Auxiliar", memberId: 13 },
+            { classId: "jovens", role: "Professor", memberId: 12 }, { classId: "jovens", role: "Auxiliar", memberId: 7 },
+            { classId: "adultos", role: "Professor", memberId: 3 }, { classId: "adultos", role: "Auxiliar", memberId: 2 },
+        ],
+    },
+    {
+        id: "esc2", date: nextSundayISO(1), time: "09:00",
+        assignments: [
+            { classId: "berc", role: "Professor", memberId: 9 }, { classId: "berc", role: "Auxiliar", memberId: 7 },
+            { classId: "crianca", role: "Professor", memberId: 5 },
+            { classId: "junior", role: "Auxiliar", memberId: 13 },
+            { classId: "jovens", role: "Professor", memberId: 12 },
+            { classId: "adultos", role: "Professor", memberId: 11 }, { classId: "adultos", role: "Auxiliar", memberId: 2 },
+        ],
+    },
+];
+const EBD_WATCHNOTES_INIT = [
+    { id: "wn1", memberId: 21, note: "Conversar com Renato sobre as últimas ausências e entender se está passando por algum momento difícil.", createdAt: lastSundaysISO(1)[0], resolved: false },
+];
+// ── Calendário — os eventos da EBD usam calendarId "team-10" (a equipe
+// "Escola Bíblica"), então aparecem automaticamente no Calendário geral da
+// igreja junto com os demais eventos de equipe, sem nenhum código novo de
+// integração. As aulas semanais entram como um único evento recorrente por
+// turma (mesmo padrão já usado para os cultos de domingo). ─────────────────
+const EBD_CAL_EVENTS = [
+    ...EBD_CLASSES.filter(c => c.status === "Ativa").map((c, i) => ({
+        id: 9500 + i, calendarId: "team-10", title: `EBD — ${c.name}`,
+        date: nextSundayISO(0), time: c.time, location: c.room, color: c.color,
+        eventType: "Aula", organizer: c.teacherId ? findMemberName(c.teacherId) : undefined,
+        status: "Confirmado", recurrence: "Toda semana",
+        description: c.description,
+    })),
+    { id: 9600, calendarId: "team-10", title: "Reunião de Professores", date: nextSundayISO(0), time: "10:30", location: "Sala 3", color: "#0ea5e9", eventType: "Reunião", organizer: "Maria Santos", status: "Confirmado", description: "Alinhamento mensal de professores e auxiliares da EBD, logo após as aulas." },
+    { id: 9601, calendarId: "team-10", title: "Encerramento do 3º Trimestre", date: nextSundayISO(6), time: "09:00", location: "Salão", color: "#0ea5e9", eventType: "Evento", organizer: "Rev. Carlos Mendes", status: "Confirmado", description: "Apresentação das turmas e entrega de certificados de participação." },
+];
+// ── Lookups e cálculos ───────────────────────────────────────────────────────
+function findMember(id) { return id != null ? MEMBERS.find(m => m.id === id) : undefined; }
+function findMemberName(id) { var _a; return ((_a = findMember(id)) === null || _a === void 0 ? void 0 : _a.name) || "—"; }
+function ebdClassById(id, classes = EBD_CLASSES) { return id ? classes.find(c => c.id === id) : undefined; }
+function ebdClassRoster(classId, enrollments) {
+    return enrollments.filter(e => e.classId === classId && e.status !== "Transferido" && e.status !== "Inativo");
+}
+// Frequência = presenças ÷ registros possíveis, calculada diretamente das
+// sessões — nunca uma média estimada ou arredondada de forma otimista.
+function ebdAttendanceRate(sessions) {
+    let present = 0, total = 0;
+    sessions.forEach(s => s.records.forEach(r => { total++; if (r.present)
+        present++; }));
+    return total === 0 ? 0 : Math.round((present / total) * 100);
+}
+function ebdClassSessions(classId, sessions) {
+    return sessions.filter(s => s.classId === classId).sort((a, b) => a.date.localeCompare(b.date));
+}
+function ebdStudentSessions(memberId, sessions) {
+    return sessions
+        .flatMap(s => s.records.filter(r => r.memberId === memberId).map(r => ({ date: s.date, classId: s.classId, present: r.present, reason: r.reason })))
+        .sort((a, b) => a.date.localeCompare(b.date));
+}
+// Faltas consecutivas mais recentes — conta a partir do registro mais novo
+// para trás, parando na primeira presença. É exatamente isso (e não uma
+// contagem total de faltas) que caracteriza "ausência recorrente".
+function ebdConsecutiveAbsences(memberId, sessions) {
+    const rows = ebdStudentSessions(memberId, sessions).slice().reverse();
+    let streak = 0;
+    for (const r of rows) {
+        if (r.present)
+            break;
+        streak++;
+    }
+    return streak;
+}
+function ebdLastAttendance(memberId, sessions) {
+    const rows = ebdStudentSessions(memberId, sessions);
+    const presentRows = rows.filter(r => r.present);
+    return presentRows.length ? { date: presentRows[presentRows.length - 1].date, present: true } : undefined;
+}
+function ebdDetectConflicts(scales, classes, mainScales) {
+    const conflicts = [];
+    scales.forEach(scale => {
+        const byMember = new Map();
+        scale.assignments.forEach(a => {
+            const cls = ebdClassById(a.classId, classes);
+            const list = byMember.get(a.memberId) || [];
+            list.push(`${a.role} — ${(cls === null || cls === void 0 ? void 0 : cls.name) || a.classId}`);
+            byMember.set(a.memberId, list);
+        });
+        byMember.forEach((classNames, memberId) => {
+            const memberName = findMemberName(memberId);
+            const otherEvents = mainScales
+                .filter(s => s.date === scale.date && s.time === scale.time && s.assignments.some(a => a.members.includes(memberName)))
+                .map(s => s.title);
+            if (classNames.length > 1 || otherEvents.length > 0) {
+                conflicts.push({ memberId, date: scale.date, time: scale.time, ebdClassNames: classNames, otherEvents });
+            }
+        });
+    });
+    return conflicts;
+}
+// "Próximas aulas" — uma ocorrência por turma ativa no próximo domingo.
+function ebdUpcomingSessions(classes, weeksAhead = 0) {
+    const date = nextSundayISO(weeksAhead);
+    return classes.filter(c => c.status === "Ativa").map(c => ({ date, class: c }));
+}
+// ─── EBD: badges de status ──────────────────────────────────────────────────
+const EBD_ENROLL_CLS = {
+    "Ativo": "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+    "Inativo": "bg-red-500/15 text-red-400 border-red-500/30",
+    "Aguardando turma": "bg-amber-500/15 text-amber-400 border-amber-500/30",
+    "Transferido": "bg-sky-500/15 text-sky-400 border-sky-500/30",
+};
+const EBD_CLASS_CLS = {
+    "Ativa": "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+    "Em pausa": "bg-amber-500/15 text-amber-400 border-amber-500/30",
+    "Encerrada": "bg-muted text-muted-foreground border-border",
+};
+const EBD_LESSON_CLS = {
+    "Planejada": "bg-muted text-muted-foreground border-border",
+    "Próxima": "bg-sky-500/15 text-sky-400 border-sky-500/30",
+    "Realizada": "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+    "Cancelada": "bg-red-500/15 text-red-400 border-red-500/30",
+};
+function EbdModule({ calEvents, setCalEvents, setModule }) {
+    const [tab, setTab] = useState("visao");
+    const [classes, setClasses] = useState(EBD_CLASSES);
+    const [enrollments, setEnrollments] = useState(EBD_ENROLLMENTS);
+    const [attendance, setAttendance] = useState(EBD_ATTENDANCE_INIT);
+    const [terms, setTerms] = useState(EBD_TERMS);
+    const [scales, setScales] = useState(EBD_SCALES_INIT);
+    const [watchNotes, setWatchNotes] = useState(EBD_WATCHNOTES_INIT);
+    const [toast, setToast] = useState(null);
+    const [selectedClassId, setSelectedClassId] = useState(null);
+    const [selectedStudentId, setSelectedStudentId] = useState(null);
+    const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
+    const goToClass = (classId) => { setSelectedClassId(classId); setTab("turmas"); };
+    const goToStudent = (memberId) => { setSelectedStudentId(memberId); setTab("alunos"); };
+    const ctx = {
+        classes, setClasses, enrollments, setEnrollments, attendance, setAttendance,
+        terms, setTerms, scales, setScales, watchNotes, setWatchNotes,
+        calEvents, setCalEvents, showToast, goToClass, goToStudent,
+        selectedClassId, setSelectedClassId: (id) => setSelectedClassId(id),
+        selectedStudentId, setSelectedStudentId: (id) => setSelectedStudentId(id),
+        setModule, setTab,
+    };
+    const tabs = [
+        { id: "visao", label: "Visão geral", icon: LayoutDashboard },
+        { id: "turmas", label: "Turmas", icon: Layers },
+        { id: "alunos", label: "Alunos", icon: Users },
+        { id: "frequencia", label: "Frequência", icon: ListChecks },
+        { id: "escalas", label: "Escalas", icon: ClipboardList },
+        { id: "conteudos", label: "Conteúdos", icon: BookOpen },
+        { id: "calendario", label: "Calendário", icon: Calendar },
+        { id: "acompanhamento", label: "Acompanhamento", icon: Eye },
+        { id: "relatorios", label: "Relatórios", icon: Sigma },
+        { id: "config", label: "Configurações", icon: Settings },
+    ];
+    return (React.createElement("div", null,
+        React.createElement("div", { className: "mb-1" },
+            React.createElement("h2", { className: "text-lg font-bold text-foreground" }, "EBD \u2014 Escola B\u00EDblica Dominical"),
+            React.createElement("p", { className: "text-sm text-muted-foreground mt-0.5" }, "Turmas, alunos, frequ\u00EAncia e conte\u00FAdo \u2014 integrados a Pessoas, Escalas e Calend\u00E1rio.")),
+        React.createElement(TabBar, { tabs: tabs, active: tab, onChange: (id) => { setTab(id); } }),
+        tab === "visao" && React.createElement(EbdDashboardTab, { ctx: ctx }),
+        tab === "turmas" && React.createElement(EbdClassesTab, { ctx: ctx }),
+        tab === "alunos" && React.createElement(EbdStudentsTab, { ctx: ctx }),
+        tab === "frequencia" && React.createElement(EbdAttendanceTab, { ctx: ctx }),
+        tab === "escalas" && React.createElement(EbdSchedulesTab, { ctx: ctx }),
+        tab === "conteudos" && React.createElement(EbdContentTab, { ctx: ctx }),
+        tab === "calendario" && React.createElement(EbdCalendarTab, { ctx: ctx }),
+        tab === "acompanhamento" && React.createElement(EbdFollowUpTab, { ctx: ctx }),
+        tab === "relatorios" && React.createElement(EbdReportsTab, { ctx: ctx }),
+        tab === "config" && React.createElement(EbdSettingsTab, { ctx: ctx }),
+        toast && React.createElement(MinToast, { message: toast })));
+}
+// ─── EBD · Visão geral ───────────────────────────────────────────────────────
+function EbdFrequencyChart({ ctx }) {
+    const [classFilter, setClassFilter] = useState("todas");
+    const data = useMemo(() => EBD_SUNDAYS.map(date => {
+        const sessions = ctx.attendance.filter(s => s.date === date && (classFilter === "todas" || s.classId === classFilter));
+        return { semana: formatDate(date).slice(0, 5), frequencia: ebdAttendanceRate(sessions) };
+    }), [ctx.attendance, classFilter]);
+    return (React.createElement(DashCard, { title: "Evolu\u00E7\u00E3o da frequ\u00EAncia", action: React.createElement(SelWrap, null,
+            React.createElement("select", { className: `${sel()} w-40`, value: classFilter, onChange: e => setClassFilter(e.target.value) },
+                React.createElement("option", { value: "todas" }, "Todas as turmas"),
+                ctx.classes.map(c => React.createElement("option", { key: c.id, value: c.id }, c.name)))) },
+        React.createElement("p", { className: "text-xs text-muted-foreground -mt-2 mb-3" }, "Percentual de presen\u00E7a por domingo, com base nas chamadas j\u00E1 registradas."),
+        React.createElement(ResponsiveContainer, { width: "100%", height: 190 },
+            React.createElement(BarChart, { data: data },
+                React.createElement(XAxis, { dataKey: "semana", tick: { fill: "var(--muted-foreground)", fontSize: 11 }, axisLine: false, tickLine: false }),
+                React.createElement(YAxis, { tick: { fill: "var(--muted-foreground)", fontSize: 11 }, axisLine: false, tickLine: false, width: 32, domain: [0, 100] }),
+                React.createElement(Tooltip, { contentStyle: { background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--popover-foreground)", fontSize: 12 }, cursor: { fill: "rgba(4,185,205,0.08)" } }),
+                React.createElement(Bar, { dataKey: "frequencia", fill: "#04B9CD", radius: [4, 4, 0, 0] })))));
+}
+function EbdUpcomingWidget({ ctx }) {
+    const upcoming = ebdUpcomingSessions(ctx.classes);
+    return (React.createElement(DashCard, { title: "Pr\u00F3ximas aulas", action: React.createElement("button", { onClick: () => ctx.setTab("calendario"), className: "text-xs text-primary hover:underline" }, "Ver calend\u00E1rio") }, upcoming.length === 0 ? (React.createElement(EmptyState, { icon: Calendar, title: "Nenhuma aula programada", desc: "Turmas ativas aparecer\u00E3o aqui com data, sala e professor." })) : (React.createElement("div", { className: "space-y-2" }, upcoming.map(({ date, class: c }) => (React.createElement("button", { key: c.id, onClick: () => ctx.goToClass(c.id), className: "w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left" },
+        React.createElement("div", { className: "w-1 self-stretch rounded-full flex-shrink-0", style: { background: c.color, minHeight: 32 } }),
+        React.createElement("div", { className: "flex-1 min-w-0" },
+            React.createElement("div", { className: "text-sm font-medium text-foreground truncate" }, c.name),
+            React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" },
+                formatDate(date),
+                " \u00B7 ",
+                c.time,
+                " \u00B7 ",
+                c.room,
+                " \u00B7 ",
+                c.teacherId ? findMemberName(c.teacherId) : "Sem professor")))))))));
+}
+function EbdClassComparisonTable({ ctx }) {
+    const rows = ctx.classes.filter(c => c.status === "Ativa").map(c => ({
+        c, rate: ebdAttendanceRate(ebdClassSessions(c.id, ctx.attendance)), count: ebdClassRoster(c.id, ctx.enrollments).length,
+    }));
+    return (React.createElement(DashCard, { title: "Frequ\u00EAncia por turma" }, rows.length === 0 ? (React.createElement(EmptyState, { icon: Layers, title: "Nenhuma turma ativa", desc: "Crie turmas para acompanhar a frequ\u00EAncia aqui." })) : (React.createElement("div", { className: "overflow-x-auto" },
+        React.createElement("table", { className: "w-full text-sm" },
+            React.createElement("thead", null,
+                React.createElement("tr", { className: "text-left text-xs text-muted-foreground border-b border-border" },
+                    React.createElement("th", { className: "pb-2 font-medium" }, "Turma"),
+                    React.createElement("th", { className: "pb-2 font-medium" }, "Alunos"),
+                    React.createElement("th", { className: "pb-2 font-medium" }, "Frequ\u00EAncia m\u00E9dia"))),
+            React.createElement("tbody", null, rows.map(r => (React.createElement("tr", { key: r.c.id, className: "border-b border-border/60 last:border-0 cursor-pointer hover:bg-muted/30 transition-colors", onClick: () => ctx.goToClass(r.c.id) },
+                React.createElement("td", { className: "py-2.5" },
+                    React.createElement("span", { className: "flex items-center gap-2 text-foreground font-medium" },
+                        React.createElement("span", { className: "w-2 h-2 rounded-full flex-shrink-0", style: { background: r.c.color } }),
+                        r.c.name)),
+                React.createElement("td", { className: "py-2.5 text-muted-foreground" },
+                    r.count,
+                    "/",
+                    r.c.capacity),
+                React.createElement("td", { className: "py-2.5 font-semibold", style: { fontFamily: "'DM Mono', monospace", color: r.rate < 60 ? "#ef4444" : r.rate < 80 ? "#d97706" : "#10b981" } },
+                    r.rate,
+                    "%"))))))))));
+}
+function EbdDashboardTab({ ctx }) {
+    const activeClasses = ctx.classes.filter(c => c.status === "Ativa");
+    const activeEnrollments = ctx.enrollments.filter(e => e.status === "Ativo");
+    const teacherIds = useMemo(() => {
+        const s = new Set();
+        activeClasses.forEach(c => { if (c.teacherId)
+            s.add(c.teacherId); c.assistantIds.forEach(id => s.add(id)); });
+        return s;
+    }, [ctx.classes]);
+    const overallRate = useMemo(() => ebdAttendanceRate(ctx.attendance), [ctx.attendance]);
+    const newStudents = useMemo(() => ctx.enrollments.filter(e => monthsBetween(e.joinDate) === 0).length, [ctx.enrollments]);
+    const recurrentAbsence = useMemo(() => activeEnrollments.filter(e => e.classId && ebdConsecutiveAbsences(e.memberId, ctx.attendance) >= 3), [ctx.enrollments, ctx.attendance]);
+    const classesNoTeacher = activeClasses.filter(c => !c.teacherId);
+    const waiting = ctx.enrollments.filter(e => e.status === "Aguardando turma");
+    const conflicts = useMemo(() => ebdDetectConflicts(ctx.scales, ctx.classes, SCALES), [ctx.scales, ctx.classes]);
+    const attentionItems = useMemo(() => {
+        const items = [];
+        if (recurrentAbsence.length > 0) {
+            items.push({
+                id: "ebd-absence", icon: AlertTriangle, tone: "danger",
+                title: `${recurrentAbsence.length} aluno${recurrentAbsence.length > 1 ? "s" : ""} há 3+ domingos sem participar`,
+                detail: recurrentAbsence.slice(0, 3).map(e => findMemberName(e.memberId)).join(", ") + (recurrentAbsence.length > 3 ? " e outros" : ""),
+                onClick: () => ctx.setTab("acompanhamento"),
+            });
+        }
+        classesNoTeacher.forEach(c => items.push({
+            id: `ebd-noteacher-${c.id}`, icon: UserPlus, tone: "warning",
+            title: `Turma sem professor: ${c.name}`, detail: "Defina um professor responsável para resolver a escala.",
+            onClick: () => ctx.goToClass(c.id),
+        }));
+        if (waiting.length > 0) {
+            items.push({
+                id: "ebd-waiting", icon: Users, tone: "warning",
+                title: `${waiting.length} novo${waiting.length > 1 ? "s" : ""} aluno${waiting.length > 1 ? "s" : ""} aguardando turma`,
+                detail: waiting.map(e => findMemberName(e.memberId)).join(", "),
+                onClick: () => ctx.setTab("alunos"),
+            });
+        }
+        conflicts.forEach((c, i) => items.push({
+            id: `ebd-conflict-${i}`, icon: AlertTriangle, tone: "danger",
+            title: `${findMemberName(c.memberId)} está escalado(a) para duas atividades no mesmo horário`,
+            detail: `${formatDate(c.date)} · ${c.time} — ${[...c.ebdClassNames, ...c.otherEvents].join(" e ")}`,
+            onClick: () => ctx.setTab("escalas"),
+        }));
+        return items;
+    }, [recurrentAbsence, classesNoTeacher, waiting, conflicts]);
+    return (React.createElement("div", { className: "space-y-5" },
+        React.createElement("div", { className: "grid grid-cols-2 lg:grid-cols-4 gap-4" },
+            React.createElement(MetricCard, { icon: Users, label: "Alunos matriculados", value: activeEnrollments.length, sub: newStudents > 0 ? `+${newStudents} este mês` : "Nenhuma matrícula nova este mês" }),
+            React.createElement(MetricCard, { icon: UserCheck, label: "Professores ativos", value: teacherIds.size, sub: `Em ${activeClasses.length} turma${activeClasses.length === 1 ? "" : "s"} ativa${activeClasses.length === 1 ? "" : "s"}` }),
+            React.createElement(MetricCard, { icon: Layers, label: "Turmas ativas", value: activeClasses.length, sub: `${ctx.classes.length} no total` }),
+            React.createElement(MetricCard, { icon: ListChecks, label: "Frequ\u00EAncia m\u00E9dia", value: `${overallRate}%`, tone: overallRate < 70 ? "attention" : "neutral", sub: "\u00DAltimos 6 domingos" })),
+        React.createElement("div", { className: "grid grid-cols-1 lg:grid-cols-3 gap-4" },
+            React.createElement("div", { className: "lg:col-span-2" },
+                React.createElement(EbdFrequencyChart, { ctx: ctx })),
+            React.createElement(EbdUpcomingWidget, { ctx: ctx })),
+        React.createElement("div", { className: "grid grid-cols-1 lg:grid-cols-2 gap-4" },
+            React.createElement(EbdClassComparisonTable, { ctx: ctx }),
+            React.createElement(AttentionListWidget, { items: attentionItems }))));
+}
+// ─── EBD · Turmas ────────────────────────────────────────────────────────────
+function EbdClassCard({ ctx, cls }) {
+    const roster = ebdClassRoster(cls.id, ctx.enrollments);
+    const rate = ebdAttendanceRate(ebdClassSessions(cls.id, ctx.attendance));
+    return (React.createElement("div", { onClick: () => ctx.setSelectedClassId(cls.id), className: "bg-card border border-border rounded-xl p-4 hover:border-[#04B9CD]/30 cursor-pointer transition-all group" },
+        React.createElement("div", { className: "flex items-start justify-between mb-3" },
+            React.createElement("div", { className: "w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0", style: { background: `${cls.color}20` } },
+                React.createElement(Layers, { size: 16, style: { color: cls.color } })),
+            React.createElement(Badge, { label: cls.status, cls: EBD_CLASS_CLS[cls.status] })),
+        React.createElement("div", { className: "text-sm font-semibold text-foreground group-hover:text-primary transition-colors" }, cls.name),
+        React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" },
+            cls.category,
+            " \u00B7 ",
+            cls.room),
+        React.createElement("div", { className: "flex items-center gap-3 mt-3 text-xs text-muted-foreground" },
+            React.createElement("span", { className: "flex items-center gap-1" },
+                React.createElement(Clock, { size: 11 }),
+                cls.time),
+            React.createElement("span", { className: "flex items-center gap-1" },
+                React.createElement(Users, { size: 11 }),
+                roster.length,
+                "/",
+                cls.capacity)),
+        React.createElement("div", { className: "flex items-center justify-between mt-3 pt-3 border-t border-border" },
+            cls.teacherId ? (React.createElement("div", { className: "flex items-center gap-2 min-w-0" },
+                React.createElement(Avt, { name: findMemberName(cls.teacherId), size: "sm" }),
+                React.createElement("span", { className: "text-xs text-foreground truncate" }, findMemberName(cls.teacherId)))) : (React.createElement("span", { className: "text-xs text-amber-500 flex items-center gap-1 flex-shrink-0" },
+                React.createElement(AlertTriangle, { size: 11 }),
+                " Sem professor")),
+            React.createElement("span", { className: "text-xs font-semibold flex-shrink-0", style: { fontFamily: "'DM Mono', monospace", color: rate < 60 ? "#ef4444" : rate < 80 ? "#d97706" : "#10b981" } },
+                rate,
+                "%"))));
+}
+function EbdNewClassModal({ ctx, onClose }) {
+    const [name, setName] = useState("");
+    const [category, setCategory] = useState(EBD_CATEGORIES[0]);
+    const [room, setRoom] = useState(EBD_ROOMS[0]);
+    const [time, setTime] = useState("09:00");
+    const [teacherId, setTeacherId] = useState("");
+    const [capacity, setCapacity] = useState("15");
+    const [error, setError] = useState("");
+    const submit = () => {
+        if (!name.trim()) {
+            setError("Informe um nome para a turma.");
+            return;
+        }
+        const id = uid("turma");
+        const palette = ["#0ea5e9", "#8b5cf6", "#06b6d4", "#f59e0b", "#10b981", "#ec4899"];
+        const color = palette[ctx.classes.length % palette.length];
+        const newClass = {
+            id, name: name.trim(), category, room, time,
+            teacherId: teacherId ? Number(teacherId) : undefined, assistantIds: [],
+            capacity: Number(capacity) || 10, status: "Ativa", color,
+        };
+        ctx.setClasses(prev => [...prev, newClass]);
+        ctx.setCalEvents(prev => [...prev, {
+                id: Date.now(), calendarId: "team-10", title: `EBD — ${newClass.name}`,
+                date: nextSundayISO(0), time, location: room, color, eventType: "Aula",
+                organizer: teacherId ? findMemberName(Number(teacherId)) : undefined,
+                status: "Confirmado", recurrence: "Toda semana",
+            }]);
+        ctx.showToast(`Turma "${newClass.name}" criada com sucesso.`);
+        onClose();
+    };
+    return (React.createElement(ModalShell, { title: "Nova turma", onClose: onClose },
+        React.createElement("div", { className: "space-y-3.5" },
+            React.createElement("div", null,
+                React.createElement(FL, { t: "Nome da turma", req: true }),
+                React.createElement("input", { className: inp(!!error), placeholder: "Ex.: Adolescentes", value: name, onChange: e => { setName(e.target.value); setError(""); } }),
+                React.createElement(Err, { msg: error })),
+            React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+                React.createElement("div", null,
+                    React.createElement(FL, { t: "Categoria / faixa et\u00E1ria" }),
+                    React.createElement(SelWrap, null,
+                        React.createElement("select", { className: sel(), value: category, onChange: e => setCategory(e.target.value) }, EBD_CATEGORIES.map(c => React.createElement("option", { key: c, value: c }, c))))),
+                React.createElement("div", null,
+                    React.createElement(FL, { t: "Sala" }),
+                    React.createElement(SelWrap, null,
+                        React.createElement("select", { className: sel(), value: room, onChange: e => setRoom(e.target.value) }, EBD_ROOMS.map(r => React.createElement("option", { key: r, value: r }, r)))))),
+            React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+                React.createElement("div", null,
+                    React.createElement(FL, { t: "Hor\u00E1rio" }),
+                    React.createElement("input", { type: "time", className: inp(), value: time, onChange: e => setTime(e.target.value) })),
+                React.createElement("div", null,
+                    React.createElement(FL, { t: "Capacidade" }),
+                    React.createElement("input", { type: "number", min: "1", className: inp(), value: capacity, onChange: e => setCapacity(e.target.value) }))),
+            React.createElement("div", null,
+                React.createElement(FL, { t: "Professor respons\u00E1vel" }),
+                React.createElement(SelWrap, null,
+                    React.createElement("select", { className: sel(), value: teacherId, onChange: e => setTeacherId(e.target.value) },
+                        React.createElement("option", { value: "" }, "Sem professor definido"),
+                        MEMBERS.filter(m => m.status !== "Visitante").map(m => React.createElement("option", { key: m.id, value: m.id }, m.name))))),
+            React.createElement("div", { className: "text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2.5 flex items-center gap-2" },
+                React.createElement(Info, { size: 12, className: "flex-shrink-0" }),
+                " A turma fica vinculada \u00E0 equipe \"Escola B\u00EDblica\", do Minist\u00E9rio da Educa\u00E7\u00E3o, e a aula semanal j\u00E1 entra no calend\u00E1rio.")),
+        React.createElement(ModalActions, { onCancel: onClose, onSave: submit, saveLabel: "Criar turma" })));
+}
+function EbdCommunicateModal({ cls, onClose, onSend }) {
+    const templates = [
+        "Avisar sobre mudança de horário ou sala",
+        "Enviar material da próxima aula",
+        "Lembrar professores da escala deste domingo",
+        "Mensagem livre",
+    ];
+    const [template, setTemplate] = useState(templates[0]);
+    const [message, setMessage] = useState("");
+    return (React.createElement(ModalShell, { title: `Comunicar turma — ${cls.name}`, onClose: onClose },
+        React.createElement("div", { className: "space-y-3.5" },
+            React.createElement("div", null,
+                React.createElement(FL, { t: "Tipo de comunicado" }),
+                React.createElement(SelWrap, null,
+                    React.createElement("select", { className: sel(), value: template, onChange: e => setTemplate(e.target.value) }, templates.map(t => React.createElement("option", { key: t, value: t }, t))))),
+            React.createElement("div", null,
+                React.createElement(FL, { t: "Mensagem" }),
+                React.createElement("textarea", { className: `${inp()} min-h-[100px] resize-none`, placeholder: "Escreva o que deseja comunicar aos alunos e respons\u00E1veis\u2026", value: message, onChange: e => setMessage(e.target.value) })),
+            React.createElement("div", { className: "text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2.5 flex items-center gap-2" },
+                React.createElement(Info, { size: 12, className: "flex-shrink-0" }),
+                " O envio autom\u00E1tico por WhatsApp/e-mail ainda n\u00E3o est\u00E1 dispon\u00EDvel \u2014 por enquanto, o comunicado fica registrado no hist\u00F3rico da turma.")),
+        React.createElement(ModalActions, { onCancel: onClose, onSave: () => onSend(template), saveLabel: "Registrar comunicado" })));
+}
+function EbdClassDetail({ ctx, cls, onBack }) {
+    const [subTab, setSubTab] = useState("visao");
+    const [showCommunicate, setShowCommunicate] = useState(false);
+    const roster = ebdClassRoster(cls.id, ctx.enrollments);
+    const sessions = ebdClassSessions(cls.id, ctx.attendance);
+    const rate = ebdAttendanceRate(sessions);
+    const classLessons = ctx.terms.flatMap(t => t.lessons.map(l => ({ ...l, termTitle: t.title })));
+    const subTabs = [
+        { id: "visao", label: "Visão geral" },
+        { id: "alunos", label: "Alunos" },
+        { id: "frequencia", label: "Frequência" },
+        { id: "professores", label: "Professores" },
+        { id: "aulas", label: "Aulas" },
+        { id: "conteudos", label: "Conteúdos" },
+    ];
+    return (React.createElement("div", null,
+        React.createElement(Breadcrumb, { items: [{ label: "Turmas", onClick: onBack }, { label: cls.name }] }),
+        React.createElement("div", { className: "flex items-start justify-between mb-5 gap-4 flex-wrap" },
+            React.createElement("div", { className: "flex items-center gap-3" },
+                React.createElement("div", { className: "w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0", style: { background: `${cls.color}20` } },
+                    React.createElement(Layers, { size: 20, style: { color: cls.color } })),
+                React.createElement("div", null,
+                    React.createElement("div", { className: "flex items-center gap-2" },
+                        React.createElement("h2", { className: "text-lg font-bold text-foreground" }, cls.name),
+                        React.createElement(Badge, { label: cls.status, cls: EBD_CLASS_CLS[cls.status] })),
+                    React.createElement("p", { className: "text-sm text-muted-foreground mt-0.5" },
+                        cls.category,
+                        " \u00B7 ",
+                        cls.room,
+                        " \u00B7 ",
+                        cls.time,
+                        " \u00B7 Minist\u00E9rio da Educa\u00E7\u00E3o"))),
+            React.createElement("button", { onClick: () => setShowCommunicate(true), className: "flex items-center gap-1.5 text-xs text-primary border border-[#04B9CD]/25 rounded-lg px-3 py-2 hover:bg-[#04B9CD]/10 transition-colors font-medium" },
+                React.createElement(MessageSquare, { size: 13 }),
+                " Comunicar turma")),
+        React.createElement(TabBar, { tabs: subTabs, active: subTab, onChange: setSubTab }),
+        subTab === "visao" && (React.createElement("div", { className: "grid grid-cols-1 lg:grid-cols-3 gap-4" },
+            React.createElement("div", { className: "lg:col-span-2 space-y-4" },
+                React.createElement(DashCard, { title: "Sobre a turma" },
+                    React.createElement("p", { className: "text-sm text-muted-foreground leading-relaxed" }, cls.description || "Nenhuma descrição cadastrada para esta turma.")),
+                !cls.teacherId && (React.createElement("div", { className: "flex items-start gap-3 p-4 rounded-xl border border-amber-400/25 bg-amber-500/5" },
+                    React.createElement(AlertTriangle, { size: 16, className: "text-amber-500 flex-shrink-0 mt-0.5" }),
+                    React.createElement("div", null,
+                        React.createElement("div", { className: "text-sm font-medium text-foreground" }, "Esta turma est\u00E1 sem professor respons\u00E1vel"),
+                        React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" }, "Defina um professor na aba \"Professores\" para resolver a escala e sair da lista de aten\u00E7\u00E3o."))))),
+            React.createElement("div", { className: "space-y-4" },
+                React.createElement(StatMini, { icon: Users, label: "Alunos matriculados", value: roster.length }),
+                React.createElement(StatMini, { icon: ListChecks, label: "Frequ\u00EAncia m\u00E9dia", value: rate, color: rate < 60 ? "#ef4444" : rate < 80 ? "#d97706" : "#10b981" }),
+                React.createElement(StatMini, { icon: Clock, label: "Vagas dispon\u00EDveis", value: Math.max(0, cls.capacity - roster.length) })))),
+        subTab === "alunos" && React.createElement(EbdClassRosterPanel, { ctx: ctx, cls: cls, roster: roster }),
+        subTab === "frequencia" && (sessions.length === 0 ? (React.createElement(EmptyState, { icon: ListChecks, title: "Nenhuma chamada registrada ainda", desc: "Registre a frequ\u00EAncia desta turma na aba Frequ\u00EAncia do m\u00F3dulo." })) : (React.createElement("div", { className: "overflow-x-auto" },
+            React.createElement("table", { className: "w-full text-sm" },
+                React.createElement("thead", null,
+                    React.createElement("tr", { className: "text-left text-xs text-muted-foreground border-b border-border" },
+                        React.createElement("th", { className: "pb-2 font-medium" }, "Aluno"),
+                        sessions.map(s => React.createElement("th", { key: s.id, className: "pb-2 font-medium text-center" }, formatDate(s.date).slice(0, 5))),
+                        React.createElement("th", { className: "pb-2 font-medium text-right" }, "Frequ\u00EAncia"))),
+                React.createElement("tbody", null, roster.map(e => {
+                    const studentRate = ebdAttendanceRate(sessions.filter(s => s.records.some(r => r.memberId === e.memberId)).map(s => ({ ...s, records: s.records.filter(r => r.memberId === e.memberId) })));
+                    return (React.createElement("tr", { key: e.id, className: "border-b border-border/60 last:border-0" },
+                        React.createElement("td", { className: "py-2.5 flex items-center gap-2" },
+                            React.createElement(Avt, { name: findMemberName(e.memberId), size: "sm" }),
+                            React.createElement("span", { className: "text-foreground font-medium" }, findMemberName(e.memberId))),
+                        sessions.map(s => {
+                            const rec = s.records.find(r => r.memberId === e.memberId);
+                            return (React.createElement("td", { key: s.id, className: "py-2.5 text-center" }, !rec ? React.createElement("span", { className: "text-muted-foreground/40" }, "\u2014") : rec.present ? React.createElement(CheckCircle2, { size: 14, className: "inline text-emerald-500" }) : React.createElement(X, { size: 14, className: "inline text-red-400" })));
+                        }),
+                        React.createElement("td", { className: "py-2.5 text-right font-semibold", style: { fontFamily: "'DM Mono', monospace", color: studentRate < 60 ? "#ef4444" : studentRate < 80 ? "#d97706" : "#10b981" } },
+                            studentRate,
+                            "%")));
+                })))))),
+        subTab === "professores" && React.createElement(EbdClassTeachersPanel, { ctx: ctx, cls: cls }),
+        subTab === "aulas" && (classLessons.length === 0 ? (React.createElement(EmptyState, { icon: BookOpen, title: "Nenhuma aula planejada", desc: "Cadastre o plano de aulas na aba Conte\u00FAdos do m\u00F3dulo." })) : (React.createElement("div", { className: "space-y-2" }, classLessons.map(l => (React.createElement("div", { key: l.id, className: "flex items-center gap-3 p-3 rounded-xl border border-border" },
+            React.createElement("div", { className: "w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground flex-shrink-0" }, l.number),
+            React.createElement("div", { className: "flex-1 min-w-0" },
+                React.createElement("div", { className: "text-sm font-medium text-foreground truncate" }, l.title),
+                React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" },
+                    formatDate(l.date),
+                    " \u00B7 ",
+                    l.termTitle)),
+            React.createElement(Badge, { label: l.status, cls: EBD_LESSON_CLS[l.status] }))))))),
+        subTab === "conteudos" && (React.createElement("div", { className: "space-y-2" }, classLessons.flatMap(l => l.materials.map(m => ({ ...m, lessonTitle: l.title }))).length === 0 ? (React.createElement(EmptyState, { icon: FolderOpen, title: "Nenhum material dispon\u00EDvel", desc: "Materiais adicionados \u00E0s aulas desta turma aparecer\u00E3o aqui." })) : classLessons.flatMap(l => l.materials.map(m => ({ ...m, lessonTitle: l.title }))).map(m => (React.createElement("div", { key: m.id, className: "flex items-center gap-3 p-3 rounded-xl border border-border hover:border-[#04B9CD]/30 transition-colors" },
+            React.createElement("div", { className: "w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0" },
+                React.createElement(FileText, { size: 14, className: "text-muted-foreground" })),
+            React.createElement("div", { className: "flex-1 min-w-0" },
+                React.createElement("div", { className: "text-sm font-medium text-foreground truncate" }, m.name),
+                React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" },
+                    m.type,
+                    " \u00B7 ",
+                    m.lessonTitle))))))),
+        showCommunicate && (React.createElement(EbdCommunicateModal, { cls: cls, onClose: () => setShowCommunicate(false), onSend: () => { ctx.showToast(`Comunicado registrado para a turma "${cls.name}".`); setShowCommunicate(false); } }))));
+}
+function EbdClassRosterPanel({ ctx, cls, roster }) {
+    const [showEnroll, setShowEnroll] = useState(false);
+    return (React.createElement("div", null,
+        React.createElement("div", { className: "flex items-center justify-between mb-3" },
+            React.createElement("p", { className: "text-xs text-muted-foreground" },
+                roster.length,
+                " de ",
+                cls.capacity,
+                " vagas ocupadas"),
+            React.createElement(GoldBtn, { small: true, onClick: () => setShowEnroll(true) },
+                React.createElement(Plus, { size: 12 }),
+                " Adicionar aluno")),
+        roster.length === 0 ? (React.createElement(EmptyState, { icon: Users, title: "Nenhum aluno matriculado nesta turma", desc: "Adicione alunos j\u00E1 cadastrados no sistema de Pessoas.", actionLabel: "Adicionar aluno", onAction: () => setShowEnroll(true) })) : (React.createElement("div", { className: "space-y-2" }, roster.map(e => {
+            const member = findMember(e.memberId);
+            const age = ebdAge(member === null || member === void 0 ? void 0 : member.birthDate);
+            const isChild = age != null && age < 12;
+            return (React.createElement("button", { key: e.id, onClick: () => ctx.goToStudent(e.memberId), className: "w-full flex items-center gap-3 p-3 rounded-xl border border-border hover:border-[#04B9CD]/30 transition-colors text-left" },
+                React.createElement(Avt, { name: (member === null || member === void 0 ? void 0 : member.name) || "?", size: "sm" }),
+                React.createElement("div", { className: "flex-1 min-w-0" },
+                    React.createElement("div", { className: "text-sm font-medium text-foreground truncate" }, member === null || member === void 0 ? void 0 : member.name),
+                    React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" },
+                        age != null ? `${age} anos` : "Idade não informada",
+                        isChild && (member === null || member === void 0 ? void 0 : member.guardianId) ? ` · Responsável: ${findMemberName(member.guardianId)}` : "")),
+                React.createElement(Badge, { label: e.status, cls: EBD_ENROLL_CLS[e.status] })));
+        }))),
+        showEnroll && React.createElement(EbdEnrollModal, { ctx: ctx, defaultClassId: cls.id, onClose: () => setShowEnroll(false) })));
+}
+function EbdClassTeachersPanel({ ctx, cls }) {
+    const [teacherId, setTeacherId] = useState(cls.teacherId ? String(cls.teacherId) : "");
+    const applyTeacher = () => {
+        ctx.setClasses(prev => prev.map(c => c.id === cls.id ? { ...c, teacherId: teacherId ? Number(teacherId) : undefined } : c));
+        ctx.showToast(teacherId ? `${findMemberName(Number(teacherId))} definido(a) como professor(a) responsável.` : "Professor responsável removido.");
+    };
+    return (React.createElement("div", { className: "space-y-4" },
+        React.createElement(DashCard, { title: "Professor respons\u00E1vel" },
+            React.createElement("div", { className: "flex items-end gap-3" },
+                React.createElement("div", { className: "flex-1" },
+                    React.createElement(SelWrap, null,
+                        React.createElement("select", { className: sel(), value: teacherId, onChange: e => setTeacherId(e.target.value) },
+                            React.createElement("option", { value: "" }, "Sem professor definido"),
+                            MEMBERS.filter(m => m.status !== "Visitante").map(m => React.createElement("option", { key: m.id, value: m.id }, m.name))))),
+                React.createElement(GoldBtn, { small: true, onClick: applyTeacher }, "Salvar"))),
+        React.createElement(DashCard, { title: "Professores auxiliares" },
+            cls.assistantIds.length === 0 ? (React.createElement("p", { className: "text-sm text-muted-foreground py-2" }, "Nenhum auxiliar escalado para esta turma.")) : (React.createElement("div", { className: "space-y-2" }, cls.assistantIds.map(id => (React.createElement("div", { key: id, className: "flex items-center gap-2.5" },
+                React.createElement(Avt, { name: findMemberName(id), size: "sm" }),
+                React.createElement("span", { className: "text-sm text-foreground" }, findMemberName(id))))))),
+            React.createElement("p", { className: "text-xs text-muted-foreground mt-3" }, "Auxiliares s\u00E3o definidos junto com as escalas de professores, na aba Escalas do m\u00F3dulo."))));
+}
+function EbdClassesTab({ ctx }) {
+    const [showNew, setShowNew] = useState(false);
+    if (ctx.selectedClassId) {
+        const cls = ebdClassById(ctx.selectedClassId, ctx.classes);
+        if (cls)
+            return React.createElement(EbdClassDetail, { ctx: ctx, cls: cls, onBack: () => ctx.setSelectedClassId(null) });
+    }
+    return (React.createElement("div", null,
+        React.createElement("div", { className: "flex items-start justify-between mb-5 gap-4 flex-wrap" },
+            React.createElement("div", null,
+                React.createElement("h3", { className: "text-base font-bold text-foreground" }, "Turmas"),
+                React.createElement("p", { className: "text-sm text-muted-foreground mt-0.5" }, "Organize as turmas da EBD por faixa et\u00E1ria, sala e hor\u00E1rio.")),
+            React.createElement(GoldBtn, { onClick: () => setShowNew(true) },
+                React.createElement(Plus, { size: 14 }),
+                " Nova turma")),
+        ctx.classes.length === 0 ? (React.createElement(EmptyState, { icon: Layers, title: "Ainda n\u00E3o existem turmas cadastradas", desc: "Crie sua primeira turma para come\u00E7ar a organizar a EBD.", actionLabel: "Criar turma", onAction: () => setShowNew(true) })) : (React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" }, ctx.classes.map(c => React.createElement(EbdClassCard, { key: c.id, ctx: ctx, cls: c })))),
+        showNew && React.createElement(EbdNewClassModal, { ctx: ctx, onClose: () => setShowNew(false) })));
+}
+// ─── EBD · Alunos ────────────────────────────────────────────────────────────
+function EbdEnrollModal({ ctx, defaultClassId, onClose }) {
+    const alreadyEnrolledIds = new Set(ctx.enrollments.filter(e => e.status !== "Transferido" && e.status !== "Inativo").map(e => e.memberId));
+    const candidates = MEMBERS.filter(m => !alreadyEnrolledIds.has(m.id));
+    const [memberId, setMemberId] = useState("");
+    const [classId, setClassId] = useState(defaultClassId || "");
+    const [notes, setNotes] = useState("");
+    const [error, setError] = useState("");
+    const member = memberId ? findMember(Number(memberId)) : undefined;
+    const age = ebdAge(member === null || member === void 0 ? void 0 : member.birthDate);
+    const isChild = age != null && age < 12;
+    const submit = () => {
+        if (!memberId) {
+            setError("Selecione uma pessoa do cadastro.");
+            return;
+        }
+        const id = uid("mat");
+        const entry = {
+            id, memberId: Number(memberId), classId: classId || null,
+            joinDate: todayISO(), status: classId ? "Ativo" : "Aguardando turma", notes: notes.trim() || undefined,
+            history: [{ date: todayISO(), type: "Entrada", toClassId: classId || null }],
+        };
+        ctx.setEnrollments(prev => [...prev, entry]);
+        ctx.showToast(`${member === null || member === void 0 ? void 0 : member.name} matriculado(a) na EBD com sucesso.`);
+        onClose();
+    };
+    return (React.createElement(ModalShell, { title: "Adicionar aluno \u00E0 turma", onClose: onClose },
+        React.createElement("div", { className: "space-y-3.5" },
+            React.createElement("div", { className: "text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2.5 flex items-center gap-2" },
+                React.createElement(Info, { size: 12, className: "flex-shrink-0" }),
+                " O aluno \u00E9 uma pessoa j\u00E1 existente no cadastro de Membros \u2014 nenhum cadastro novo \u00E9 criado aqui."),
+            React.createElement("div", null,
+                React.createElement(FL, { t: "Pessoa", req: true }),
+                React.createElement(SelWrap, null,
+                    React.createElement("select", { className: sel(!!error), value: memberId, onChange: e => { setMemberId(e.target.value); setError(""); } },
+                        React.createElement("option", { value: "" }, "Selecione\u2026"),
+                        candidates.map(m => React.createElement("option", { key: m.id, value: m.id }, m.name)))),
+                React.createElement(Err, { msg: error })),
+            React.createElement("div", null,
+                React.createElement(FL, { t: "Turma" }),
+                React.createElement(SelWrap, null,
+                    React.createElement("select", { className: sel(), value: classId, onChange: e => setClassId(e.target.value) },
+                        React.createElement("option", { value: "" }, "Aguardando turma"),
+                        ctx.classes.filter(c => c.status === "Ativa").map(c => React.createElement("option", { key: c.id, value: c.id }, c.name))))),
+            isChild && (React.createElement("div", { className: "text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2.5 flex items-center gap-2" },
+                React.createElement(Info, { size: 12, className: "flex-shrink-0" }),
+                " ", member === null || member === void 0 ? void 0 :
+                member.name,
+                " tem ",
+                age,
+                " anos \u2014 o respons\u00E1vel j\u00E1 cadastrado (",
+                findMemberName(member === null || member === void 0 ? void 0 : member.guardianId),
+                ") ser\u00E1 exibido no perfil do aluno.")),
+            React.createElement("div", null,
+                React.createElement(FL, { t: "Observa\u00E7\u00F5es" }),
+                React.createElement("textarea", { className: `${inp()} min-h-[70px] resize-none`, placeholder: "Opcional", value: notes, onChange: e => setNotes(e.target.value) }))),
+        React.createElement(ModalActions, { onCancel: onClose, onSave: submit, saveLabel: "Matricular" })));
+}
+function EbdTransferModal({ ctx, enrollment, onClose }) {
+    const [newClassId, setNewClassId] = useState("");
+    const [reason, setReason] = useState("");
+    const currentClass = ebdClassById(enrollment.classId, ctx.classes);
+    const submit = () => {
+        var _a;
+        if (!newClassId)
+            return;
+        ctx.setEnrollments(prev => prev.map(e => e.id === enrollment.id ? {
+            ...e, classId: newClassId, status: "Ativo",
+            history: [...e.history, { date: todayISO(), type: "Transferência", fromClassId: e.classId, toClassId: newClassId, note: reason.trim() || undefined }],
+        } : e));
+        ctx.showToast(`${findMemberName(enrollment.memberId)} transferido(a) para ${(_a = ebdClassById(newClassId, ctx.classes)) === null || _a === void 0 ? void 0 : _a.name}.`);
+        onClose();
+    };
+    return (React.createElement(ModalShell, { title: "Transferir aluno de turma", onClose: onClose },
+        React.createElement("div", { className: "space-y-3.5" },
+            React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+                React.createElement("div", null,
+                    React.createElement(FL, { t: "Turma atual" }),
+                    React.createElement("input", { className: inp(), disabled: true, value: (currentClass === null || currentClass === void 0 ? void 0 : currentClass.name) || "Aguardando turma" })),
+                React.createElement("div", null,
+                    React.createElement(FL, { t: "Nova turma", req: true }),
+                    React.createElement(SelWrap, null,
+                        React.createElement("select", { className: sel(), value: newClassId, onChange: e => setNewClassId(e.target.value) },
+                            React.createElement("option", { value: "" }, "Selecione\u2026"),
+                            ctx.classes.filter(c => c.status === "Ativa" && c.id !== enrollment.classId).map(c => React.createElement("option", { key: c.id, value: c.id }, c.name)))))),
+            React.createElement("div", null,
+                React.createElement(FL, { t: "Motivo da transfer\u00EAncia" }),
+                React.createElement("textarea", { className: `${inp()} min-h-[70px] resize-none`, placeholder: "Ex.: mudan\u00E7a de faixa et\u00E1ria", value: reason, onChange: e => setReason(e.target.value) })),
+            React.createElement("div", { className: "text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2.5 flex items-center gap-2" },
+                React.createElement(History, { size: 12, className: "flex-shrink-0" }),
+                " O hist\u00F3rico do aluno na turma anterior \u00E9 mantido \u2014 nada \u00E9 apagado ap\u00F3s a transfer\u00EAncia.")),
+        React.createElement(ModalActions, { onCancel: onClose, onSave: submit, saveLabel: "Transferir" })));
+}
+function EbdStudentDetail({ ctx, enrollment, onBack }) {
+    const [showTransfer, setShowTransfer] = useState(false);
+    const member = findMember(enrollment.memberId);
+    const cls = ebdClassById(enrollment.classId, ctx.classes);
+    const age = ebdAge(member === null || member === void 0 ? void 0 : member.birthDate);
+    const isChild = age != null && age < 12;
+    const rows = ebdStudentSessions(enrollment.memberId, ctx.attendance);
+    const rate = rows.length ? Math.round((rows.filter(r => r.present).length / rows.length) * 100) : 0;
+    const consecutiveAbsences = ebdConsecutiveAbsences(enrollment.memberId, ctx.attendance);
+    const lastAttendance = ebdLastAttendance(enrollment.memberId, ctx.attendance);
+    if (!member)
+        return React.createElement(EmptyState, { icon: Users, title: "Pessoa n\u00E3o encontrada", desc: "Este v\u00EDnculo aponta para um cadastro que n\u00E3o existe mais." });
+    return (React.createElement("div", null,
+        React.createElement(Breadcrumb, { items: [{ label: "Alunos", onClick: onBack }, { label: member.name }] }),
+        React.createElement("div", { className: "flex items-start justify-between mb-5 gap-4 flex-wrap" },
+            React.createElement("div", { className: "flex items-center gap-3" },
+                React.createElement(Avt, { name: member.name, size: "lg" }),
+                React.createElement("div", null,
+                    React.createElement("div", { className: "flex items-center gap-2 flex-wrap" },
+                        React.createElement("h2", { className: "text-lg font-bold text-foreground" }, member.name),
+                        React.createElement(Badge, { label: enrollment.status, cls: EBD_ENROLL_CLS[enrollment.status] })),
+                    React.createElement("p", { className: "text-sm text-muted-foreground mt-0.5" },
+                        age != null ? `${age} anos · ` : "",
+                        cls ? cls.name : "Aguardando turma",
+                        " \u00B7 Matriculado(a) em ",
+                        formatDate(enrollment.joinDate)))),
+            cls && React.createElement("button", { onClick: () => setShowTransfer(true), className: "flex items-center gap-1.5 text-xs text-primary border border-[#04B9CD]/25 rounded-lg px-3 py-2 hover:bg-[#04B9CD]/10 transition-colors font-medium" },
+                React.createElement(ArrowUpDown, { size: 13 }),
+                " Transferir de turma")),
+        consecutiveAbsences >= 3 && (React.createElement("div", { className: "flex items-start gap-3 p-4 rounded-xl border border-red-400/25 bg-red-500/5 mb-5" },
+            React.createElement(AlertTriangle, { size: 16, className: "text-red-500 flex-shrink-0 mt-0.5" }),
+            React.createElement("div", null,
+                React.createElement("div", { className: "text-sm font-medium text-foreground" },
+                    member.name.split(" ")[0],
+                    " est\u00E1 h\u00E1 ",
+                    consecutiveAbsences,
+                    " domingos sem participar"),
+                React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" }, "Considere um contato de acompanhamento. Veja o hist\u00F3rico completo na aba Acompanhamento.")))),
+        React.createElement("div", { className: "grid grid-cols-1 lg:grid-cols-3 gap-4" },
+            React.createElement("div", { className: "lg:col-span-2 space-y-4" },
+                isChild && (React.createElement(DashCard, { title: "Respons\u00E1vel" },
+                    React.createElement("div", { className: "space-y-2 text-sm" },
+                        React.createElement("div", { className: "flex items-center gap-2" },
+                            React.createElement(Users, { size: 13, className: "text-muted-foreground" }),
+                            React.createElement("span", { className: "text-foreground" }, findMemberName(member.guardianId))),
+                        enrollment.guardianPhone && React.createElement("div", { className: "flex items-center gap-2" },
+                            React.createElement(Phone, { size: 13, className: "text-muted-foreground" }),
+                            React.createElement("span", { className: "text-foreground" }, enrollment.guardianPhone)),
+                        React.createElement("div", { className: "flex items-center gap-2" },
+                            enrollment.authorized === false ? React.createElement(AlertTriangle, { size: 13, className: "text-amber-500" }) : React.createElement(CheckCircle2, { size: 13, className: "text-emerald-500" }),
+                            React.createElement("span", { className: "text-foreground" }, enrollment.authorized === false ? "Autorização de saída pendente" : "Autorização de saída registrada"))))),
+                enrollment.notes && (React.createElement(DashCard, { title: "Observa\u00E7\u00F5es" },
+                    React.createElement("p", { className: "text-sm text-muted-foreground leading-relaxed" }, enrollment.notes))),
+                React.createElement(DashCard, { title: "Hist\u00F3rico do aluno" },
+                    React.createElement("div", { className: "space-y-3" }, enrollment.history.map((h, i) => {
+                        var _a, _b;
+                        return (React.createElement("div", { key: i, className: "flex items-start gap-3" },
+                            React.createElement("div", { className: "w-7 h-7 rounded-lg bg-muted flex items-center justify-center flex-shrink-0" },
+                                React.createElement(History, { size: 12, className: "text-muted-foreground" })),
+                            React.createElement("div", { className: "text-sm" },
+                                React.createElement("span", { className: "text-foreground font-medium" }, h.type),
+                                React.createElement("span", { className: "text-muted-foreground" },
+                                    " \u2014 ",
+                                    formatDate(h.date)),
+                                h.type === "Transferência" && React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" },
+                                    ((_a = ebdClassById(h.fromClassId, ctx.classes)) === null || _a === void 0 ? void 0 : _a.name) || "Aguardando turma",
+                                    " \u2192 ", (_b = ebdClassById(h.toClassId, ctx.classes)) === null || _b === void 0 ? void 0 :
+                                    _b.name,
+                                    h.note ? ` · ${h.note}` : ""))));
+                    }))),
+                React.createElement(DashCard, { title: "Frequ\u00EAncia recente" }, rows.length === 0 ? (React.createElement(EmptyState, { icon: ListChecks, title: "Sem registros de frequ\u00EAncia", desc: "A frequ\u00EAncia aparece aqui ap\u00F3s a primeira chamada da turma." })) : (React.createElement("div", { className: "space-y-2" }, rows.slice(-6).reverse().map((r, i) => (React.createElement("div", { key: i, className: "flex items-center gap-3 text-sm" },
+                    r.present ? React.createElement(CheckCircle2, { size: 14, className: "text-emerald-500 flex-shrink-0" }) : React.createElement(X, { size: 14, className: "text-red-400 flex-shrink-0" }),
+                    React.createElement("span", { className: "text-foreground flex-1" }, formatDate(r.date)),
+                    !r.present && React.createElement("span", { className: "text-xs text-muted-foreground" }, r.reason || "Sem justificativa")))))))),
+            React.createElement("div", { className: "space-y-4" },
+                React.createElement(StatMini, { icon: ListChecks, label: "Frequ\u00EAncia (\u00FAltimos 6 domingos)", value: rate, color: rate < 60 ? "#ef4444" : rate < 80 ? "#d97706" : "#10b981" }),
+                React.createElement(StatMini, { icon: AlertTriangle, label: "Faltas consecutivas", value: consecutiveAbsences, color: consecutiveAbsences >= 3 ? "#ef4444" : undefined }),
+                React.createElement(StatMini, { icon: Clock, label: "Tempo na EBD", value: Math.max(0, monthsBetween(enrollment.joinDate)) }),
+                lastAttendance && React.createElement("div", { className: "bg-card border border-border rounded-xl p-3.5" },
+                    React.createElement("div", { className: "text-[11px] text-muted-foreground font-medium mb-1" }, "\u00DAltima presen\u00E7a"),
+                    React.createElement("div", { className: "text-sm font-semibold text-foreground" }, formatDate(lastAttendance.date))))),
+        showTransfer && React.createElement(EbdTransferModal, { ctx: ctx, enrollment: enrollment, onClose: () => setShowTransfer(false) })));
+}
+function EbdStudentsTab({ ctx }) {
+    const [search, setSearch] = useState("");
+    const [classFilter, setClassFilter] = useState("todas");
+    const [showEnroll, setShowEnroll] = useState(false);
+    if (ctx.selectedStudentId != null) {
+        const enrollment = ctx.enrollments.find(e => e.memberId === ctx.selectedStudentId);
+        if (enrollment)
+            return React.createElement(EbdStudentDetail, { ctx: ctx, enrollment: enrollment, onBack: () => ctx.setSelectedStudentId(null) });
+    }
+    const filtered = ctx.enrollments.filter(e => {
+        const member = findMember(e.memberId);
+        if (!member)
+            return false;
+        if (classFilter !== "todas" && e.classId !== classFilter)
+            return false;
+        return member.name.toLowerCase().includes(search.toLowerCase());
+    });
+    return (React.createElement("div", null,
+        React.createElement("div", { className: "flex items-start justify-between mb-5 gap-4 flex-wrap" },
+            React.createElement("div", null,
+                React.createElement("h3", { className: "text-base font-bold text-foreground" }, "Alunos"),
+                React.createElement("p", { className: "text-sm text-muted-foreground mt-0.5" }, "Pessoas matriculadas na EBD, com turma, situa\u00E7\u00E3o e hist\u00F3rico.")),
+            React.createElement(GoldBtn, { onClick: () => setShowEnroll(true) },
+                React.createElement(Plus, { size: 14 }),
+                " Adicionar aluno")),
+        React.createElement("div", { className: "flex flex-wrap items-center gap-2.5 mb-5" },
+            React.createElement("div", { className: "relative flex-1 min-w-[220px]" },
+                React.createElement(Search, { size: 14, className: "absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" }),
+                React.createElement("input", { className: `${inp()} pl-9`, placeholder: "Buscar aluno pelo nome\u2026", value: search, onChange: e => setSearch(e.target.value) })),
+            React.createElement(SelWrap, null,
+                React.createElement("select", { className: `${sel()} w-52`, value: classFilter, onChange: e => setClassFilter(e.target.value) },
+                    React.createElement("option", { value: "todas" }, "Todas as turmas"),
+                    ctx.classes.map(c => React.createElement("option", { key: c.id, value: c.id }, c.name))))),
+        filtered.length === 0 ? (ctx.enrollments.length === 0 ? (React.createElement(EmptyState, { icon: Users, title: "Ainda n\u00E3o h\u00E1 alunos matriculados", desc: "Adicione a primeira matr\u00EDcula usando uma pessoa j\u00E1 cadastrada em Membros.", actionLabel: "Adicionar aluno", onAction: () => setShowEnroll(true) })) : (React.createElement(EmptyState, { icon: Search, title: "Nenhum aluno encontrado", desc: "Tente ajustar a busca ou o filtro de turma." }))) : (React.createElement("div", { className: "overflow-x-auto" },
+            React.createElement("table", { className: "w-full text-sm" },
+                React.createElement("thead", null,
+                    React.createElement("tr", { className: "text-left text-xs text-muted-foreground border-b border-border" },
+                        React.createElement("th", { className: "pb-2 font-medium" }, "Aluno"),
+                        React.createElement("th", { className: "pb-2 font-medium" }, "Turma"),
+                        React.createElement("th", { className: "pb-2 font-medium" }, "Situa\u00E7\u00E3o"),
+                        React.createElement("th", { className: "pb-2 font-medium" }, "Matr\u00EDcula"))),
+                React.createElement("tbody", null, filtered.map(e => {
+                    const member = findMember(e.memberId);
+                    const cls = ebdClassById(e.classId, ctx.classes);
+                    return (React.createElement("tr", { key: e.id, onClick: () => ctx.goToStudent(e.memberId), className: "border-b border-border/60 last:border-0 cursor-pointer hover:bg-muted/30 transition-colors" },
+                        React.createElement("td", { className: "py-2.5" },
+                            React.createElement("div", { className: "flex items-center gap-2" },
+                                React.createElement(Avt, { name: (member === null || member === void 0 ? void 0 : member.name) || "?", size: "sm" }),
+                                React.createElement("span", { className: "text-foreground font-medium" }, member === null || member === void 0 ? void 0 : member.name))),
+                        React.createElement("td", { className: "py-2.5 text-muted-foreground" }, (cls === null || cls === void 0 ? void 0 : cls.name) || "—"),
+                        React.createElement("td", { className: "py-2.5" },
+                            React.createElement(Badge, { label: e.status, cls: EBD_ENROLL_CLS[e.status] })),
+                        React.createElement("td", { className: "py-2.5 text-muted-foreground" }, formatDate(e.joinDate))));
+                }))))),
+        showEnroll && React.createElement(EbdEnrollModal, { ctx: ctx, onClose: () => setShowEnroll(false) })));
+}
+// ─── EBD · Frequência ────────────────────────────────────────────────────────
+function EbdAttendanceTaker({ ctx, classId, date, onDone }) {
+    const cls = ebdClassById(classId, ctx.classes);
+    const roster = ebdClassRoster(classId, ctx.enrollments);
+    const existing = ctx.attendance.find(s => s.classId === classId && s.date === date);
+    const [records, setRecords] = useState(() => {
+        const map = {};
+        roster.forEach(e => {
+            const rec = existing === null || existing === void 0 ? void 0 : existing.records.find(r => r.memberId === e.memberId);
+            map[e.memberId] = rec ? { present: rec.present, reason: rec.reason } : { present: true };
+        });
+        return map;
+    });
+    const setPresent = (memberId, present) => setRecords(prev => { var _a; return ({ ...prev, [memberId]: { present, reason: present ? undefined : (_a = prev[memberId]) === null || _a === void 0 ? void 0 : _a.reason } }); });
+    const setReason = (memberId, reason) => setRecords(prev => ({ ...prev, [memberId]: { ...prev[memberId], reason } }));
+    const markAll = (present) => setRecords(prev => { const next = { ...prev }; roster.forEach(e => { var _a; next[e.memberId] = { present, reason: present ? undefined : (_a = next[e.memberId]) === null || _a === void 0 ? void 0 : _a.reason }; }); return next; });
+    const presentCount = Object.values(records).filter(r => r.present).length;
+    const save = () => {
+        const session = {
+            id: (existing === null || existing === void 0 ? void 0 : existing.id) || uid("freq"), classId, date,
+            records: roster.map(e => { var _a, _b, _c; return ({ memberId: e.memberId, present: (_b = (_a = records[e.memberId]) === null || _a === void 0 ? void 0 : _a.present) !== null && _b !== void 0 ? _b : true, reason: (_c = records[e.memberId]) === null || _c === void 0 ? void 0 : _c.reason }); }),
+        };
+        ctx.setAttendance(prev => existing ? prev.map(s => s.id === existing.id ? session : s) : [...prev, session]);
+        ctx.showToast(`Frequência de ${cls.name} registrada — ${presentCount}/${roster.length} presentes.`);
+        onDone();
+    };
+    if (roster.length === 0) {
+        return React.createElement(EmptyState, { icon: Users, title: "Esta turma ainda n\u00E3o tem alunos", desc: "Adicione alunos \u00E0 turma antes de registrar a frequ\u00EAncia." });
+    }
+    return (React.createElement("div", null,
+        React.createElement("div", { className: "flex items-center justify-between mb-4 flex-wrap gap-2" },
+            React.createElement("div", { className: "text-sm text-muted-foreground" },
+                presentCount,
+                "/",
+                roster.length,
+                " presentes"),
+            React.createElement("div", { className: "flex gap-2" },
+                React.createElement("button", { onClick: () => markAll(true), className: "text-xs font-medium text-emerald-500 border border-emerald-500/25 rounded-lg px-3 py-1.5 hover:bg-emerald-500/10 transition-colors" }, "Marcar todos presentes"),
+                React.createElement("button", { onClick: () => markAll(false), className: "text-xs font-medium text-red-400 border border-red-400/25 rounded-lg px-3 py-1.5 hover:bg-red-400/10 transition-colors" }, "Marcar ausentes"))),
+        React.createElement("div", { className: "space-y-2" }, roster.map(e => {
+            const member = findMember(e.memberId);
+            const rec = records[e.memberId];
+            return (React.createElement("div", { key: e.id, className: "flex items-center gap-3 p-3 rounded-xl border border-border flex-wrap" },
+                React.createElement(Avt, { name: (member === null || member === void 0 ? void 0 : member.name) || "?", size: "sm" }),
+                React.createElement("span", { className: "text-sm font-medium text-foreground flex-1 min-w-[120px] truncate" }, member === null || member === void 0 ? void 0 : member.name),
+                !rec.present && (React.createElement(SelWrap, null,
+                    React.createElement("select", { className: `${sel()} w-44 !py-1.5 !text-xs`, value: rec.reason || "", onChange: ev => setReason(e.memberId, (ev.target.value || undefined)) },
+                        React.createElement("option", { value: "" }, "Justificativa (opcional)"),
+                        EBD_ABSENCE_REASONS.map(r => React.createElement("option", { key: r, value: r }, r))))),
+                React.createElement("div", { className: "flex items-center bg-muted/50 border border-border rounded-lg p-0.5 flex-shrink-0" },
+                    React.createElement("button", { onClick: () => setPresent(e.memberId, true), className: `px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${rec.present ? "bg-emerald-500/15 text-emerald-500" : "text-muted-foreground hover:text-foreground"}` }, "Presente"),
+                    React.createElement("button", { onClick: () => setPresent(e.memberId, false), className: `px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${!rec.present ? "bg-red-400/15 text-red-400" : "text-muted-foreground hover:text-foreground"}` }, "Ausente"))));
+        })),
+        React.createElement(ModalActions, { onCancel: onDone, onSave: save, saveLabel: "Salvar frequ\u00EAncia" })));
+}
+function EbdAttendanceTab({ ctx }) {
+    var _a;
+    const activeClasses = ctx.classes.filter(c => c.status === "Ativa");
+    const [classId, setClassId] = useState(((_a = activeClasses[0]) === null || _a === void 0 ? void 0 : _a.id) || "");
+    const [date, setDate] = useState(EBD_SUNDAYS[EBD_SUNDAYS.length - 1]);
+    const [taking, setTaking] = useState(false);
+    if (activeClasses.length === 0) {
+        return React.createElement(EmptyState, { icon: ListChecks, title: "Nenhuma turma ativa para registrar frequ\u00EAncia", desc: "Crie uma turma na aba Turmas para come\u00E7ar a fazer chamada." });
+    }
+    const cls = ebdClassById(classId, ctx.classes);
+    const existing = ctx.attendance.find(s => s.classId === classId && s.date === date);
+    return (React.createElement("div", null,
+        React.createElement("div", { className: "mb-5" },
+            React.createElement("h3", { className: "text-base font-bold text-foreground" }, "Frequ\u00EAncia"),
+            React.createElement("p", { className: "text-sm text-muted-foreground mt-0.5" }, "Registre a presen\u00E7a dos alunos em poucos cliques, turma por turma.")),
+        React.createElement("div", { className: "flex flex-wrap items-end gap-3 mb-5" },
+            React.createElement("div", null,
+                React.createElement(FL, { t: "Turma" }),
+                React.createElement(SelWrap, null,
+                    React.createElement("select", { className: `${sel()} w-56`, value: classId, onChange: e => { setClassId(e.target.value); setTaking(false); } }, activeClasses.map(c => React.createElement("option", { key: c.id, value: c.id }, c.name))))),
+            React.createElement("div", null,
+                React.createElement(FL, { t: "Domingo" }),
+                React.createElement(SelWrap, null,
+                    React.createElement("select", { className: `${sel()} w-40`, value: date, onChange: e => { setDate(e.target.value); setTaking(false); } }, EBD_SUNDAYS.map(d => React.createElement("option", { key: d, value: d }, formatDate(d)))))),
+            !taking && (React.createElement("button", { onClick: () => setTaking(true), className: "flex items-center gap-1.5 bg-[#04B9CD] hover:bg-[#03a3b5] active:scale-95 text-[#0d1e2e] font-semibold rounded-lg transition-all px-4 py-2.5 text-sm" },
+                React.createElement(ListChecks, { size: 14 }),
+                " ",
+                existing ? "Editar chamada" : "Registrar frequência"))),
+        taking && cls ? (React.createElement(EbdAttendanceTaker, { ctx: ctx, classId: classId, date: date, onDone: () => setTaking(false) })) : existing ? (React.createElement("div", { className: "bg-card border border-border rounded-xl p-5" },
+            React.createElement("div", { className: "flex items-center gap-2 text-sm text-foreground mb-2" },
+                React.createElement(CheckCircle2, { size: 15, className: "text-emerald-500" }),
+                " Chamada j\u00E1 registrada para ", cls === null || cls === void 0 ? void 0 :
+                cls.name,
+                " em ",
+                formatDate(date),
+                "."),
+            React.createElement("div", { className: "text-sm text-muted-foreground" },
+                existing.records.filter(r => r.present).length,
+                "/",
+                existing.records.length,
+                " presentes."))) : (React.createElement(EmptyState, { icon: ListChecks, title: "Chamada ainda n\u00E3o registrada", desc: `Nenhuma frequência registrada para ${cls === null || cls === void 0 ? void 0 : cls.name} em ${formatDate(date)}.`, actionLabel: "Registrar frequ\u00EAncia", onAction: () => setTaking(true) }))));
+}
+// ─── EBD · Escalas ───────────────────────────────────────────────────────────
+function EbdAddScaleModal({ ctx, onClose }) {
+    var _a;
+    const [date, setDate] = useState(nextSundayISO(0));
+    const [time, setTime] = useState("09:00");
+    const [classId, setClassId] = useState(((_a = ctx.classes[0]) === null || _a === void 0 ? void 0 : _a.id) || "");
+    const [role, setRole] = useState("Auxiliar");
+    const [memberId, setMemberId] = useState("");
+    const [error, setError] = useState("");
+    const submit = () => {
+        var _a;
+        if (!memberId || !classId) {
+            setError("Selecione a turma e a pessoa a ser escalada.");
+            return;
+        }
+        ctx.setScales(prev => {
+            const existing = prev.find(s => s.date === date && s.time === time);
+            const assignment = { classId, role, memberId: Number(memberId) };
+            if (existing)
+                return prev.map(s => s.id === existing.id ? { ...s, assignments: [...s.assignments, assignment] } : s);
+            return [...prev, { id: uid("escala"), date, time, assignments: [assignment] }];
+        });
+        ctx.showToast(`${findMemberName(Number(memberId))} escalado(a) para ${(_a = ebdClassById(classId, ctx.classes)) === null || _a === void 0 ? void 0 : _a.name}.`);
+        onClose();
+    };
+    return (React.createElement(ModalShell, { title: "Escalar professor", onClose: onClose },
+        React.createElement("div", { className: "space-y-3.5" },
+            React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+                React.createElement("div", null,
+                    React.createElement(FL, { t: "Data" }),
+                    React.createElement("input", { type: "date", className: inp(), value: date, onChange: e => setDate(e.target.value) })),
+                React.createElement("div", null,
+                    React.createElement(FL, { t: "Hor\u00E1rio" }),
+                    React.createElement("input", { type: "time", className: inp(), value: time, onChange: e => setTime(e.target.value) }))),
+            React.createElement("div", null,
+                React.createElement(FL, { t: "Turma" }),
+                React.createElement(SelWrap, null,
+                    React.createElement("select", { className: sel(), value: classId, onChange: e => setClassId(e.target.value) }, ctx.classes.map(c => React.createElement("option", { key: c.id, value: c.id }, c.name))))),
+            React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+                React.createElement("div", null,
+                    React.createElement(FL, { t: "Fun\u00E7\u00E3o" }),
+                    React.createElement(SelWrap, null,
+                        React.createElement("select", { className: sel(), value: role, onChange: e => setRole(e.target.value) },
+                            React.createElement("option", { value: "Professor" }, "Professor"),
+                            React.createElement("option", { value: "Auxiliar" }, "Auxiliar")))),
+                React.createElement("div", null,
+                    React.createElement(FL, { t: "Pessoa", req: true }),
+                    React.createElement(SelWrap, null,
+                        React.createElement("select", { className: sel(!!error), value: memberId, onChange: e => { setMemberId(e.target.value); setError(""); } },
+                            React.createElement("option", { value: "" }, "Selecione\u2026"),
+                            MEMBERS.filter(m => m.status !== "Visitante").map(m => React.createElement("option", { key: m.id, value: m.id }, m.name)))))),
+            React.createElement(Err, { msg: error })),
+        React.createElement(ModalActions, { onCancel: onClose, onSave: submit, saveLabel: "Escalar" })));
+}
+function EbdSchedulesTab({ ctx }) {
+    const [showAdd, setShowAdd] = useState(false);
+    const upcoming = ctx.scales.filter(s => s.date >= todayISO()).sort((a, b) => a.date.localeCompare(b.date));
+    const conflicts = useMemo(() => ebdDetectConflicts(ctx.scales, ctx.classes, SCALES), [ctx.scales, ctx.classes]);
+    return (React.createElement("div", null,
+        React.createElement("div", { className: "flex items-start justify-between mb-5 gap-4 flex-wrap" },
+            React.createElement("div", null,
+                React.createElement("h3", { className: "text-base font-bold text-foreground" }, "Escalas"),
+                React.createElement("p", { className: "text-sm text-muted-foreground mt-0.5" }, "Professores e auxiliares escalados por aula, com detec\u00E7\u00E3o autom\u00E1tica de conflitos.")),
+            React.createElement(GoldBtn, { onClick: () => setShowAdd(true) },
+                React.createElement(Plus, { size: 14 }),
+                " Escalar professor")),
+        conflicts.length > 0 && (React.createElement("div", { className: "space-y-2 mb-5" }, conflicts.map((c, i) => (React.createElement("div", { key: i, className: "flex items-start gap-3 p-4 rounded-xl border border-red-400/25 bg-red-500/5" },
+            React.createElement(AlertTriangle, { size: 16, className: "text-red-500 flex-shrink-0 mt-0.5" }),
+            React.createElement("div", { className: "text-sm" },
+                React.createElement("span", { className: "font-medium text-foreground" },
+                    "\u26A0\uFE0F ",
+                    findMemberName(c.memberId),
+                    " est\u00E1 escalado(a) para duas atividades no mesmo hor\u00E1rio"),
+                React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" },
+                    formatDate(c.date),
+                    " \u00B7 ",
+                    c.time,
+                    " \u2014 ",
+                    [...c.ebdClassNames, ...c.otherEvents].join(" e ")))))))),
+        upcoming.length === 0 ? (React.createElement(EmptyState, { icon: ClipboardList, title: "Nenhuma escala futura", desc: "Escale professores e auxiliares para as pr\u00F3ximas aulas.", actionLabel: "Escalar professor", onAction: () => setShowAdd(true) })) : (React.createElement("div", { className: "space-y-4" }, upcoming.map(scale => (React.createElement("div", { key: scale.id, className: "bg-card border border-border rounded-xl p-5" },
+            React.createElement("div", { className: "flex items-center gap-4 mb-4 text-xs text-muted-foreground" },
+                React.createElement("span", { className: "flex items-center gap-1.5" },
+                    React.createElement(Calendar, { size: 11 }),
+                    formatDate(scale.date)),
+                React.createElement("span", { className: "flex items-center gap-1.5" },
+                    React.createElement(Clock, { size: 11 }),
+                    scale.time)),
+            React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-3" }, ctx.classes.filter(c => scale.assignments.some(a => a.classId === c.id)).map(c => (React.createElement("div", { key: c.id, className: "rounded-xl p-4", style: { background: `${c.color}10`, border: `1px solid ${c.color}20` } },
+                React.createElement("div", { className: "flex items-center gap-2 mb-3" },
+                    React.createElement("span", { className: "w-2 h-2 rounded-full", style: { background: c.color } }),
+                    React.createElement("span", { className: "text-sm font-semibold text-foreground" }, c.name)),
+                React.createElement("div", { className: "space-y-2" }, scale.assignments.filter(a => a.classId === c.id).map((a, i) => {
+                    const hasConflict = conflicts.some(cf => cf.date === scale.date && cf.time === scale.time && cf.memberId === a.memberId);
+                    return (React.createElement("div", { key: i, className: "flex items-center gap-2" },
+                        React.createElement(Avt, { name: findMemberName(a.memberId), size: "sm" }),
+                        React.createElement("span", { className: "text-xs text-foreground" }, findMemberName(a.memberId)),
+                        React.createElement("span", { className: "text-[10px] text-muted-foreground ml-1" }, a.role),
+                        hasConflict && React.createElement(AlertTriangle, { size: 12, className: "text-red-500 ml-auto flex-shrink-0" })));
+                }))))))))))),
+        showAdd && React.createElement(EbdAddScaleModal, { ctx: ctx, onClose: () => setShowAdd(false) })));
+}
+// ─── EBD · Conteúdos ─────────────────────────────────────────────────────────
+function EbdAddMaterialModal({ onClose, onAdd }) {
+    const [name, setName] = useState("");
+    const [type, setType] = useState("PDF");
+    const [error, setError] = useState("");
+    const submit = () => {
+        if (!name.trim()) {
+            setError("Informe um nome para o material.");
+            return;
+        }
+        onAdd({ id: uid("mat"), name: name.trim(), type });
+        onClose();
+    };
+    return (React.createElement(ModalShell, { title: "Adicionar material \u00E0 aula", onClose: onClose },
+        React.createElement("div", { className: "space-y-3.5" },
+            React.createElement("div", null,
+                React.createElement(FL, { t: "Nome do material", req: true }),
+                React.createElement("input", { className: inp(!!error), placeholder: "Ex.: Slides da aula", value: name, onChange: e => { setName(e.target.value); setError(""); } }),
+                React.createElement(Err, { msg: error })),
+            React.createElement("div", null,
+                React.createElement(FL, { t: "Tipo" }),
+                React.createElement(SelWrap, null,
+                    React.createElement("select", { className: sel(), value: type, onChange: e => setType(e.target.value) }, ["PDF", "Apresentação", "Documento", "Vídeo", "Link"].map(t => React.createElement("option", { key: t, value: t }, t)))))),
+        React.createElement(ModalActions, { onCancel: onClose, onSave: submit, saveLabel: "Adicionar" })));
+}
+function EbdLessonDetail({ ctx, term, lesson, onBack }) {
+    const [showAddMaterial, setShowAddMaterial] = useState(false);
+    const addMaterial = (m) => {
+        ctx.setTerms(prev => prev.map(t => t.id !== term.id ? t : { ...t, lessons: t.lessons.map(l => l.id === lesson.id ? { ...l, materials: [...l.materials, m] } : l) }));
+        ctx.showToast(`Material "${m.name}" adicionado à aula.`);
+    };
+    return (React.createElement("div", null,
+        React.createElement(Breadcrumb, { items: [{ label: "Conteúdos", onClick: onBack }, { label: lesson.title }] }),
+        React.createElement("div", { className: "flex items-start justify-between mb-5 gap-4 flex-wrap" },
+            React.createElement("div", null,
+                React.createElement("div", { className: "flex items-center gap-2 flex-wrap" },
+                    React.createElement("h2", { className: "text-lg font-bold text-foreground" },
+                        "Aula ",
+                        lesson.number,
+                        " \u2014 ",
+                        lesson.title),
+                    React.createElement(Badge, { label: lesson.status, cls: EBD_LESSON_CLS[lesson.status] })),
+                React.createElement("p", { className: "text-sm text-muted-foreground mt-0.5" },
+                    term.title,
+                    " \u00B7 ",
+                    formatDate(lesson.date),
+                    lesson.bibleText ? ` · ${lesson.bibleText}` : ""))),
+        React.createElement("div", { className: "grid grid-cols-1 lg:grid-cols-3 gap-4" },
+            React.createElement("div", { className: "lg:col-span-2 space-y-4" },
+                lesson.objectives && React.createElement(DashCard, { title: "Objetivos" },
+                    React.createElement("p", { className: "text-sm text-muted-foreground leading-relaxed" }, lesson.objectives)),
+                lesson.content && React.createElement(DashCard, { title: "Conte\u00FAdo" },
+                    React.createElement("p", { className: "text-sm text-muted-foreground leading-relaxed" }, lesson.content)),
+                lesson.activities && React.createElement(DashCard, { title: "Atividades" },
+                    React.createElement("p", { className: "text-sm text-muted-foreground leading-relaxed" }, lesson.activities)),
+                lesson.discussionQuestions.length > 0 && (React.createElement(DashCard, { title: "Perguntas para discuss\u00E3o" },
+                    React.createElement("ul", { className: "space-y-2" }, lesson.discussionQuestions.map((q, i) => React.createElement("li", { key: i, className: "text-sm text-muted-foreground flex gap-2" },
+                        React.createElement("span", { className: "text-primary font-semibold flex-shrink-0" },
+                            i + 1,
+                            "."),
+                        q))))),
+                lesson.teacherNotes && React.createElement(DashCard, { title: "Observa\u00E7\u00F5es do professor" },
+                    React.createElement("p", { className: "text-sm text-muted-foreground leading-relaxed" }, lesson.teacherNotes)),
+                !lesson.objectives && !lesson.content && !lesson.activities && lesson.discussionQuestions.length === 0 && (React.createElement(EmptyState, { icon: FileText, title: "Plano da aula ainda n\u00E3o preenchido", desc: "Objetivos, conte\u00FAdo e atividades aparecer\u00E3o aqui assim que forem cadastrados." }))),
+            React.createElement("div", { className: "space-y-4" },
+                React.createElement(DashCard, { title: "Materiais de apoio", action: React.createElement("button", { onClick: () => setShowAddMaterial(true), className: "text-xs text-primary hover:underline" }, "Adicionar") }, lesson.materials.length === 0 ? (React.createElement("p", { className: "text-sm text-muted-foreground py-2" }, "Nenhum material adicionado ainda.")) : (React.createElement("div", { className: "space-y-2" }, lesson.materials.map(m => (React.createElement("div", { key: m.id, className: "flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/40 transition-colors" },
+                    React.createElement(FileText, { size: 13, className: "text-muted-foreground flex-shrink-0" }),
+                    React.createElement("div", { className: "min-w-0" },
+                        React.createElement("div", { className: "text-xs font-medium text-foreground truncate" }, m.name),
+                        React.createElement("div", { className: "text-[10px] text-muted-foreground" }, m.type)))))))))),
+        showAddMaterial && React.createElement(EbdAddMaterialModal, { onClose: () => setShowAddMaterial(false), onAdd: addMaterial })));
+}
+function EbdNewLessonModal({ ctx, term, onClose }) {
+    const [title, setTitle] = useState("");
+    const [date, setDate] = useState(nextSundayISO(term.lessons.length));
+    const [bibleText, setBibleText] = useState("");
+    const [objectives, setObjectives] = useState("");
+    const [error, setError] = useState("");
+    const submit = () => {
+        if (!title.trim()) {
+            setError("Informe um título para a aula.");
+            return;
+        }
+        const lesson = {
+            id: uid("aula"), termId: term.id, number: term.lessons.length + 1, title: title.trim(),
+            date, bibleText: bibleText.trim() || undefined, objectives: objectives.trim() || undefined,
+            materials: [], discussionQuestions: [], status: "Planejada",
+        };
+        ctx.setTerms(prev => prev.map(t => t.id === term.id ? { ...t, lessons: [...t.lessons, lesson] } : t));
+        ctx.showToast(`Aula "${lesson.title}" adicionada ao plano de ${term.title}.`);
+        onClose();
+    };
+    return (React.createElement(ModalShell, { title: "Nova aula", onClose: onClose },
+        React.createElement("div", { className: "space-y-3.5" },
+            React.createElement("div", { className: "text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2.5 flex items-center gap-2" },
+                React.createElement(Info, { size: 12, className: "flex-shrink-0" }),
+                " Aula ",
+                term.lessons.length + 1,
+                " do plano \"",
+                term.title,
+                "\"."),
+            React.createElement("div", null,
+                React.createElement(FL, { t: "T\u00EDtulo da aula", req: true }),
+                React.createElement("input", { className: inp(!!error), placeholder: "Ex.: A vida de Davi", value: title, onChange: e => { setTitle(e.target.value); setError(""); } }),
+                React.createElement(Err, { msg: error })),
+            React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+                React.createElement("div", null,
+                    React.createElement(FL, { t: "Data" }),
+                    React.createElement("input", { type: "date", className: inp(), value: date, onChange: e => setDate(e.target.value) })),
+                React.createElement("div", null,
+                    React.createElement(FL, { t: "Texto b\u00EDblico" }),
+                    React.createElement("input", { className: inp(), placeholder: "Ex.: Salmos 23", value: bibleText, onChange: e => setBibleText(e.target.value) }))),
+            React.createElement("div", null,
+                React.createElement(FL, { t: "Objetivos" }),
+                React.createElement("textarea", { className: `${inp()} min-h-[70px] resize-none`, placeholder: "O que os alunos devem aprender nesta aula?", value: objectives, onChange: e => setObjectives(e.target.value) }))),
+        React.createElement(ModalActions, { onCancel: onClose, onSave: submit, saveLabel: "Criar aula" })));
+}
+function EbdContentTab({ ctx }) {
+    const [selected, setSelected] = useState(null);
+    const [view, setView] = useState("plano");
+    const [newLessonTermId, setNewLessonTermId] = useState(null);
+    if (selected) {
+        const term = ctx.terms.find(t => t.id === selected.termId);
+        const lesson = term === null || term === void 0 ? void 0 : term.lessons.find(l => l.id === selected.lessonId);
+        if (term && lesson)
+            return React.createElement(EbdLessonDetail, { ctx: ctx, term: term, lesson: lesson, onBack: () => setSelected(null) });
+    }
+    const allMaterials = ctx.terms.flatMap(t => t.lessons.flatMap(l => l.materials.map(m => ({ ...m, lessonTitle: l.title }))));
+    return (React.createElement("div", null,
+        React.createElement("div", { className: "flex items-start justify-between mb-5 gap-4 flex-wrap" },
+            React.createElement("div", null,
+                React.createElement("h3", { className: "text-base font-bold text-foreground" }, "Conte\u00FAdos"),
+                React.createElement("p", { className: "text-sm text-muted-foreground mt-0.5" }, "Plano de aulas por trimestre e biblioteca de materiais compartilhados.")),
+            React.createElement("div", { className: "flex items-center bg-muted/50 border border-border rounded-xl p-0.5" },
+                React.createElement("button", { onClick: () => setView("plano"), className: `px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${view === "plano" ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"}` }, "Plano de aulas"),
+                React.createElement("button", { onClick: () => setView("biblioteca"), className: `px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${view === "biblioteca" ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"}` }, "Biblioteca"))),
+        view === "plano" ? (ctx.terms.length === 0 ? (React.createElement(EmptyState, { icon: BookOpen, title: "Nenhum trimestre cadastrado", desc: "Cadastre o primeiro trimestre para organizar o plano de aulas." })) : (React.createElement("div", { className: "space-y-6" }, ctx.terms.map(term => (React.createElement("div", { key: term.id },
+            React.createElement("div", { className: "flex items-start justify-between mb-3 gap-3" },
+                React.createElement("div", null,
+                    React.createElement("h4", { className: "text-sm font-bold text-foreground" }, term.title),
+                    React.createElement("p", { className: "text-xs text-muted-foreground mt-0.5" },
+                        "Tema: ",
+                        term.theme,
+                        " \u00B7 ",
+                        formatDate(term.startDate),
+                        " \u2013 ",
+                        formatDate(term.endDate))),
+                React.createElement("button", { onClick: () => setNewLessonTermId(term.id), className: "flex items-center gap-1.5 text-xs text-primary border border-[#04B9CD]/25 rounded-lg px-3 py-1.5 hover:bg-[#04B9CD]/10 transition-colors font-medium flex-shrink-0" },
+                    React.createElement(Plus, { size: 12 }),
+                    " Nova aula")),
+            React.createElement("div", { className: "space-y-2" }, term.lessons.map(l => (React.createElement("button", { key: l.id, onClick: () => setSelected({ termId: term.id, lessonId: l.id }), className: "w-full flex items-center gap-3 p-3 rounded-xl border border-border hover:border-[#04B9CD]/30 transition-colors text-left" },
+                React.createElement("div", { className: "w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground flex-shrink-0" }, l.number),
+                React.createElement("div", { className: "flex-1 min-w-0" },
+                    React.createElement("div", { className: "text-sm font-medium text-foreground truncate" }, l.title),
+                    React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" },
+                        formatDate(l.date),
+                        l.bibleText ? ` · ${l.bibleText}` : "")),
+                React.createElement(Badge, { label: l.status, cls: EBD_LESSON_CLS[l.status] }))))))))))) : (allMaterials.length === 0 ? (React.createElement(EmptyState, { icon: FolderOpen, title: "Nenhum material na biblioteca ainda", desc: "Materiais adicionados \u00E0s aulas aparecem aqui, dispon\u00EDveis para todos os professores." })) : (React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" }, allMaterials.map(m => (React.createElement("div", { key: m.id, className: "bg-card border border-border rounded-xl p-4" },
+            React.createElement("div", { className: "w-9 h-9 rounded-lg bg-muted flex items-center justify-center mb-3" },
+                React.createElement(FileText, { size: 16, className: "text-muted-foreground" })),
+            React.createElement("div", { className: "text-sm font-medium text-foreground truncate" }, m.name),
+            React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" },
+                m.type,
+                " \u00B7 ",
+                m.lessonTitle))))))),
+        newLessonTermId && (() => {
+            const term = ctx.terms.find(t => t.id === newLessonTermId);
+            return term ? React.createElement(EbdNewLessonModal, { ctx: ctx, term: term, onClose: () => setNewLessonTermId(null) }) : null;
+        })()));
+}
+// ─── EBD · Calendário ────────────────────────────────────────────────────────
+function EbdCalendarTab({ ctx }) {
+    const upcoming = ctx.calEvents.filter(e => e.calendarId === "team-10" && e.date >= todayISO()).sort((a, b) => a.date.localeCompare(b.date));
+    return (React.createElement("div", null,
+        React.createElement("div", { className: "flex items-start justify-between mb-5 gap-4 flex-wrap" },
+            React.createElement("div", null,
+                React.createElement("h3", { className: "text-base font-bold text-foreground" }, "Calend\u00E1rio"),
+                React.createElement("p", { className: "text-sm text-muted-foreground mt-0.5" }, "Os eventos da EBD j\u00E1 fazem parte do calend\u00E1rio geral da igreja \u2014 nenhuma agenda separada.")),
+            React.createElement("button", { onClick: () => ctx.setModule("calendar"), className: "flex items-center gap-1.5 text-xs text-primary border border-[#04B9CD]/25 rounded-lg px-3 py-2 hover:bg-[#04B9CD]/10 transition-colors font-medium" },
+                React.createElement(ExternalLink, { size: 13 }),
+                " Abrir calend\u00E1rio geral")),
+        upcoming.length === 0 ? (React.createElement(EmptyState, { icon: Calendar, title: "Nenhum evento futuro da EBD", desc: "Aulas e eventos criados neste m\u00F3dulo aparecem aqui e tamb\u00E9m no Calend\u00E1rio geral." })) : (React.createElement("div", { className: "space-y-2" }, upcoming.map(ev => (React.createElement("div", { key: ev.id, className: "flex items-center gap-3 p-3 rounded-xl border border-border" },
+            React.createElement("div", { className: "w-1 self-stretch rounded-full flex-shrink-0", style: { background: ev.color, minHeight: 32 } }),
+            React.createElement("div", { className: "flex-1 min-w-0" },
+                React.createElement("div", { className: "text-sm font-medium text-foreground truncate" }, ev.title),
+                React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" },
+                    formatDate(ev.date),
+                    " \u00B7 ",
+                    ev.time,
+                    " \u00B7 ",
+                    ev.location,
+                    ev.organizer ? ` · ${ev.organizer}` : "")),
+            React.createElement(Badge, { label: ev.eventType || "Evento", cls: "border-border text-muted-foreground bg-transparent flex-shrink-0" }))))))));
+}
+// ─── EBD · Acompanhamento ────────────────────────────────────────────────────
+function EbdWatchModal({ ctx, memberId, onClose }) {
+    const [note, setNote] = useState("");
+    const [error, setError] = useState("");
+    const submit = () => {
+        if (!note.trim()) {
+            setError("Descreva o que motiva o acompanhamento.");
+            return;
+        }
+        ctx.setWatchNotes(prev => [...prev, { id: uid("obs"), memberId, note: note.trim(), createdAt: todayISO(), resolved: false }]);
+        ctx.showToast(`Acompanhamento registrado para ${findMemberName(memberId)}.`);
+        onClose();
+    };
+    return (React.createElement(ModalShell, { title: `Marcar acompanhamento necessário — ${findMemberName(memberId)}`, onClose: onClose },
+        React.createElement("div", { className: "space-y-3.5" },
+            React.createElement("div", null,
+                React.createElement(FL, { t: "Observa\u00E7\u00E3o interna", req: true }),
+                React.createElement("textarea", { className: `${inp(!!error)} min-h-[100px] resize-none`, placeholder: "Ex.: conversar com a fam\u00EDlia sobre as \u00FAltimas aus\u00EAncias\u2026", value: note, onChange: e => { setNote(e.target.value); setError(""); } }),
+                React.createElement(Err, { msg: error }))),
+        React.createElement(ModalActions, { onCancel: onClose, onSave: submit, saveLabel: "Registrar" })));
+}
+function EbdFollowUpTab({ ctx }) {
+    const [watchTarget, setWatchTarget] = useState(null);
+    const activeEnrollments = ctx.enrollments.filter(e => e.status === "Ativo" && e.classId);
+    const rows = activeEnrollments.map(e => {
+        const consecutive = ebdConsecutiveAbsences(e.memberId, ctx.attendance);
+        const sessions = ebdStudentSessions(e.memberId, ctx.attendance);
+        const rate = sessions.length ? Math.round((sessions.filter(s => s.present).length / sessions.length) * 100) : 0;
+        const last = ebdLastAttendance(e.memberId, ctx.attendance);
+        const notes = ctx.watchNotes.filter(w => w.memberId === e.memberId && !w.resolved);
+        return { e, consecutive, rate, last, notes };
+    }).sort((a, b) => b.consecutive - a.consecutive);
+    const needsAttention = rows.filter(r => r.consecutive >= 3 || r.rate < 50 || r.notes.length > 0);
+    return (React.createElement("div", null,
+        React.createElement("div", { className: "mb-5" },
+            React.createElement("h3", { className: "text-base font-bold text-foreground" }, "Acompanhamento"),
+            React.createElement("p", { className: "text-sm text-muted-foreground mt-0.5" }, "Vai al\u00E9m da chamada: frequ\u00EAncia, faltas consecutivas, tempo na turma e hist\u00F3rico de cada aluno.")),
+        needsAttention.length > 0 && (React.createElement(DashCard, { title: "Precisam de acompanhamento", className: "mb-5" },
+            React.createElement("div", { className: "space-y-2" }, needsAttention.map(r => (React.createElement("div", { key: r.e.id, className: "flex items-center gap-3 p-3 rounded-xl border border-amber-400/25 bg-amber-500/5 flex-wrap" },
+                React.createElement(Avt, { name: findMemberName(r.e.memberId), size: "sm" }),
+                React.createElement("div", { className: "flex-1 min-w-[160px]" },
+                    React.createElement("button", { onClick: () => ctx.goToStudent(r.e.memberId), className: "text-sm font-medium text-foreground hover:text-primary transition-colors" }, findMemberName(r.e.memberId)),
+                    React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" },
+                        r.consecutive >= 3 ? `${r.consecutive} domingos seguidos sem participar` : r.rate < 50 ? `Frequência de ${r.rate}% no período` : "Observação registrada",
+                        r.notes.length > 0 ? ` · ${r.notes.length} nota${r.notes.length > 1 ? "s" : ""} em aberto` : "")),
+                React.createElement("button", { onClick: () => setWatchTarget(r.e.memberId), className: "text-xs text-primary border border-[#04B9CD]/25 rounded-lg px-2.5 py-1.5 hover:bg-[#04B9CD]/10 transition-colors font-medium flex-shrink-0" }, "Marcar acompanhamento"))))))),
+        React.createElement(DashCard, { title: "Todos os alunos ativos" }, rows.length === 0 ? (React.createElement(EmptyState, { icon: Eye, title: "Nenhum aluno ativo em turma", desc: "Matricule alunos em turmas para acompanhar a evolu\u00E7\u00E3o deles aqui." })) : (React.createElement("div", { className: "overflow-x-auto" },
+            React.createElement("table", { className: "w-full text-sm" },
+                React.createElement("thead", null,
+                    React.createElement("tr", { className: "text-left text-xs text-muted-foreground border-b border-border" },
+                        React.createElement("th", { className: "pb-2 font-medium" }, "Aluno"),
+                        React.createElement("th", { className: "pb-2 font-medium" }, "Frequ\u00EAncia"),
+                        React.createElement("th", { className: "pb-2 font-medium" }, "\u00DAltima presen\u00E7a"),
+                        React.createElement("th", { className: "pb-2 font-medium" }, "Faltas seguidas"),
+                        React.createElement("th", { className: "pb-2 font-medium" }))),
+                React.createElement("tbody", null, rows.map(r => (React.createElement("tr", { key: r.e.id, className: "border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors" },
+                    React.createElement("td", { className: "py-2.5" },
+                        React.createElement("button", { onClick: () => ctx.goToStudent(r.e.memberId), className: "flex items-center gap-2 text-left" },
+                            React.createElement(Avt, { name: findMemberName(r.e.memberId), size: "sm" }),
+                            React.createElement("span", { className: "text-foreground font-medium" }, findMemberName(r.e.memberId)))),
+                    React.createElement("td", { className: "py-2.5 font-semibold", style: { fontFamily: "'DM Mono', monospace", color: r.rate < 60 ? "#ef4444" : r.rate < 80 ? "#d97706" : "#10b981" } },
+                        r.rate,
+                        "%"),
+                    React.createElement("td", { className: "py-2.5 text-muted-foreground" }, r.last ? formatDate(r.last.date) : "—"),
+                    React.createElement("td", { className: "py-2.5" }, r.consecutive > 0 ? React.createElement("span", { className: "text-red-400 font-medium" }, r.consecutive) : React.createElement("span", { className: "text-muted-foreground" }, "0")),
+                    React.createElement("td", { className: "py-2.5 text-right" },
+                        React.createElement("button", { onClick: () => setWatchTarget(r.e.memberId), className: "text-xs text-primary hover:underline" }, "Acompanhar")))))))))),
+        watchTarget != null && React.createElement(EbdWatchModal, { ctx: ctx, memberId: watchTarget, onClose: () => setWatchTarget(null) })));
+}
+// ─── EBD · Relatórios ────────────────────────────────────────────────────────
+function EbdReportsTab({ ctx }) {
+    const activeClasses = ctx.classes.filter(c => c.status === "Ativa");
+    const activeEnrollments = ctx.enrollments.filter(e => e.status === "Ativo");
+    const overallRate = ebdAttendanceRate(ctx.attendance);
+    const newStudents = ctx.enrollments.filter(e => monthsBetween(e.joinDate) <= 2).length;
+    const transfers = ctx.enrollments.filter(e => e.history.some(h => h.type === "Transferência")).length;
+    const recurrentAbsence = activeEnrollments.filter(e => e.classId && ebdConsecutiveAbsences(e.memberId, ctx.attendance) >= 3);
+    const classRates = activeClasses.map(c => ({ c, rate: ebdAttendanceRate(ebdClassSessions(c.id, ctx.attendance)) }));
+    const belowAverage = classRates.filter(r => r.rate < overallRate).sort((a, b) => a.rate - b.rate);
+    const teacherIds = new Set();
+    activeClasses.forEach(c => { if (c.teacherId)
+        teacherIds.add(c.teacherId); c.assistantIds.forEach(id => teacherIds.add(id)); });
+    const conflictCount = ebdDetectConflicts(ctx.scales, ctx.classes, SCALES).length;
+    return (React.createElement("div", { className: "space-y-5" },
+        React.createElement("div", null,
+            React.createElement("h3", { className: "text-base font-bold text-foreground" }, "Relat\u00F3rios"),
+            React.createElement("p", { className: "text-sm text-muted-foreground mt-0.5" }, "Frequ\u00EAncia, crescimento, professores e turmas \u2014 tudo calculado a partir dos dados j\u00E1 registrados.")),
+        React.createElement(DashCard, { title: "Relat\u00F3rio executivo da EBD" },
+            React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4" },
+                React.createElement("div", null,
+                    React.createElement("div", { className: "text-2xl font-semibold text-foreground", style: { fontFamily: "'DM Mono', monospace" } }, activeEnrollments.length),
+                    React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" }, "Alunos ativos")),
+                React.createElement("div", null,
+                    React.createElement("div", { className: "text-2xl font-semibold text-foreground", style: { fontFamily: "'DM Mono', monospace" } },
+                        overallRate,
+                        "%"),
+                    React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" }, "Frequ\u00EAncia m\u00E9dia")),
+                React.createElement("div", null,
+                    React.createElement("div", { className: "text-2xl font-semibold text-foreground", style: { fontFamily: "'DM Mono', monospace" } }, newStudents),
+                    React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" }, "Novos alunos (60 dias)")),
+                React.createElement("div", null,
+                    React.createElement("div", { className: "text-2xl font-semibold", style: { fontFamily: "'DM Mono', monospace", color: recurrentAbsence.length > 0 ? "#ef4444" : "var(--foreground)" } }, recurrentAbsence.length),
+                    React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" }, "Com aus\u00EAncia recorrente")),
+                React.createElement("div", null,
+                    React.createElement("div", { className: "text-2xl font-semibold text-foreground", style: { fontFamily: "'DM Mono', monospace" } }, belowAverage.length),
+                    React.createElement("div", { className: "text-xs text-muted-foreground mt-0.5" }, "Turmas abaixo da m\u00E9dia")))),
+        React.createElement("div", { className: "grid grid-cols-1 lg:grid-cols-2 gap-4" },
+            React.createElement(DashCard, { title: "Frequ\u00EAncia por turma" }, classRates.length === 0 ? React.createElement("p", { className: "text-sm text-muted-foreground py-2" }, "Nenhuma turma ativa.") : (React.createElement("div", { className: "space-y-2.5" }, classRates.map(r => (React.createElement("div", { key: r.c.id, className: "flex items-center gap-3" },
+                React.createElement("span", { className: "text-xs text-foreground flex-1 truncate" },
+                    r.c.name,
+                    " ",
+                    React.createElement("span", { className: "text-muted-foreground" },
+                        "\u00B7 ",
+                        r.c.category)),
+                React.createElement("div", { className: "w-24 h-1.5 rounded-full bg-muted overflow-hidden flex-shrink-0" },
+                    React.createElement("div", { className: "h-full rounded-full", style: { width: `${r.rate}%`, background: r.rate < 60 ? "#ef4444" : r.rate < 80 ? "#d97706" : "#10b981" } })),
+                React.createElement("span", { className: "text-xs font-semibold w-9 text-right flex-shrink-0", style: { fontFamily: "'DM Mono', monospace" } },
+                    r.rate,
+                    "%"))))))),
+            React.createElement(DashCard, { title: "Crescimento" },
+                React.createElement("div", { className: "space-y-2.5 text-sm" },
+                    React.createElement("div", { className: "flex justify-between" },
+                        React.createElement("span", { className: "text-muted-foreground" }, "Novos alunos (60 dias)"),
+                        React.createElement("span", { className: "font-semibold text-foreground", style: { fontFamily: "'DM Mono', monospace" } }, newStudents)),
+                    React.createElement("div", { className: "flex justify-between" },
+                        React.createElement("span", { className: "text-muted-foreground" }, "Transfer\u00EAncias registradas"),
+                        React.createElement("span", { className: "font-semibold text-foreground", style: { fontFamily: "'DM Mono', monospace" } }, transfers)),
+                    React.createElement("div", { className: "flex justify-between" },
+                        React.createElement("span", { className: "text-muted-foreground" }, "Aguardando turma"),
+                        React.createElement("span", { className: "font-semibold text-foreground", style: { fontFamily: "'DM Mono', monospace" } }, ctx.enrollments.filter(e => e.status === "Aguardando turma").length)),
+                    React.createElement("div", { className: "flex justify-between" },
+                        React.createElement("span", { className: "text-muted-foreground" }, "Inativos"),
+                        React.createElement("span", { className: "font-semibold text-foreground", style: { fontFamily: "'DM Mono', monospace" } }, ctx.enrollments.filter(e => e.status === "Inativo").length)))),
+            React.createElement(DashCard, { title: "Professores" },
+                React.createElement("div", { className: "space-y-2.5 text-sm" },
+                    React.createElement("div", { className: "flex justify-between" },
+                        React.createElement("span", { className: "text-muted-foreground" }, "Professores/auxiliares ativos"),
+                        React.createElement("span", { className: "font-semibold text-foreground", style: { fontFamily: "'DM Mono', monospace" } }, teacherIds.size)),
+                    React.createElement("div", { className: "flex justify-between" },
+                        React.createElement("span", { className: "text-muted-foreground" }, "Turmas sem professor"),
+                        React.createElement("span", { className: "font-semibold", style: { fontFamily: "'DM Mono', monospace", color: activeClasses.filter(c => !c.teacherId).length > 0 ? "#ef4444" : "var(--foreground)" } }, activeClasses.filter(c => !c.teacherId).length)),
+                    React.createElement("div", { className: "flex justify-between" },
+                        React.createElement("span", { className: "text-muted-foreground" }, "Conflitos de escala em aberto"),
+                        React.createElement("span", { className: "font-semibold", style: { fontFamily: "'DM Mono', monospace", color: conflictCount > 0 ? "#ef4444" : "var(--foreground)" } }, conflictCount)))),
+            React.createElement(DashCard, { title: "Turmas abaixo da m\u00E9dia" }, belowAverage.length === 0 ? (React.createElement("p", { className: "text-sm text-muted-foreground py-2" }, "Nenhuma turma abaixo da m\u00E9dia geral no momento.")) : (React.createElement("div", { className: "space-y-2" }, belowAverage.map(r => React.createElement("div", { key: r.c.id, className: "flex items-center justify-between text-sm" },
+                React.createElement("span", { className: "text-foreground" }, r.c.name),
+                React.createElement("span", { className: "text-red-400 font-semibold", style: { fontFamily: "'DM Mono', monospace" } },
+                    r.rate,
+                    "%")))))))));
+}
+// ─── EBD · Configurações ─────────────────────────────────────────────────────
+function EbdSettingsTab({ ctx }) {
+    const [categories, setCategories] = useState(EBD_CATEGORIES);
+    const [rooms, setRooms] = useState(EBD_ROOMS);
+    const [newCategory, setNewCategory] = useState("");
+    const [newRoom, setNewRoom] = useState("");
+    const addCategory = () => { if (!newCategory.trim())
+        return; setCategories(prev => [...prev, newCategory.trim()]); setNewCategory(""); ctx.showToast("Categoria adicionada."); };
+    const addRoom = () => { if (!newRoom.trim())
+        return; setRooms(prev => [...prev, newRoom.trim()]); setNewRoom(""); ctx.showToast("Sala adicionada."); };
+    return (React.createElement("div", { className: "space-y-5" },
+        React.createElement("div", null,
+            React.createElement("h3", { className: "text-base font-bold text-foreground" }, "Configura\u00E7\u00F5es"),
+            React.createElement("p", { className: "text-sm text-muted-foreground mt-0.5" }, "Listas configur\u00E1veis usadas em turmas, matr\u00EDculas e frequ\u00EAncia da EBD.")),
+        React.createElement("div", { className: "grid grid-cols-1 lg:grid-cols-2 gap-4" },
+            React.createElement(DashCard, { title: "Categorias / faixas et\u00E1rias" },
+                React.createElement("div", { className: "flex flex-wrap gap-2 mb-3" }, categories.map(c => React.createElement(Badge, { key: c, label: c, cls: "border-border text-foreground bg-muted/40" }))),
+                React.createElement("div", { className: "flex gap-2" },
+                    React.createElement("input", { className: inp(), placeholder: "Nova categoria", value: newCategory, onChange: e => setNewCategory(e.target.value) }),
+                    React.createElement(GoldBtn, { small: true, onClick: addCategory },
+                        React.createElement(Plus, { size: 12 })))),
+            React.createElement(DashCard, { title: "Salas" },
+                React.createElement("div", { className: "flex flex-wrap gap-2 mb-3" }, rooms.map(r => React.createElement(Badge, { key: r, label: r, cls: "border-border text-foreground bg-muted/40" }))),
+                React.createElement("div", { className: "flex gap-2" },
+                    React.createElement("input", { className: inp(), placeholder: "Nova sala", value: newRoom, onChange: e => setNewRoom(e.target.value) }),
+                    React.createElement(GoldBtn, { small: true, onClick: addRoom },
+                        React.createElement(Plus, { size: 12 })))),
+            React.createElement(DashCard, { title: "Motivos de aus\u00EAncia" },
+                React.createElement("div", { className: "flex flex-wrap gap-2" }, EBD_ABSENCE_REASONS.map(r => React.createElement(Badge, { key: r, label: r, cls: "border-border text-foreground bg-muted/40" })))),
+            React.createElement(DashCard, { title: "Trimestres / per\u00EDodos" }, ctx.terms.length === 0 ? React.createElement("p", { className: "text-sm text-muted-foreground py-2" }, "Nenhum trimestre cadastrado.") : (React.createElement("div", { className: "space-y-2" }, ctx.terms.map(t => (React.createElement("div", { key: t.id, className: "flex items-center justify-between text-sm" },
+                React.createElement("span", { className: "text-foreground" }, t.title),
+                React.createElement("span", { className: "text-xs text-muted-foreground" },
+                    formatDate(t.startDate),
+                    " \u2013 ",
+                    formatDate(t.endDate)))))))),
+            React.createElement(DashCard, { title: "Permiss\u00F5es por perfil", className: "lg:col-span-2" },
+                React.createElement("div", { className: "space-y-2 text-sm text-muted-foreground" },
+                    React.createElement("p", null,
+                        React.createElement("span", { className: "text-foreground font-medium" }, "Administrador"),
+                        " \u2014 acesso completo a todas as abas do m\u00F3dulo, incluindo relat\u00F3rios e configura\u00E7\u00F5es."),
+                    React.createElement("p", null,
+                        React.createElement("span", { className: "text-foreground font-medium" }, "L\u00EDder da EBD"),
+                        " \u2014 gerencia turmas, alunos, escalas e conte\u00FAdos; acompanha relat\u00F3rios."),
+                    React.createElement("p", null,
+                        React.createElement("span", { className: "text-foreground font-medium" }, "Professor"),
+                        " \u2014 acesso \u00E0 sua turma: frequ\u00EAncia, alunos, conte\u00FAdo e chamada r\u00E1pida pelo celular.")),
+                React.createElement("p", { className: "text-xs text-muted-foreground mt-3" }, "A distin\u00E7\u00E3o de permiss\u00F5es por perfil segue a mesma estrutura de Perfis de acesso j\u00E1 usada no restante da plataforma.")))));
+}
 // ─── Settings ─────────────────────────────────────────────────────────────────
 function SettingsGeral() {
     const [churchName, setChurchName] = useState("Igreja Comunidade da Graça");
@@ -7575,7 +9136,7 @@ function App() {
     const [module, setModule] = useState("dashboard");
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [drawerOpen, setDrawerOpen] = useState(false);
-    const [calEvents, setCalEvents] = useState(CAL_EVENTS_INIT);
+    const [calEvents, setCalEvents] = useState([...CAL_EVENTS_INIT, ...EBD_CAL_EVENTS]);
     const calProps = { calEvents, setCalEvents };
     const renderModule = () => {
         switch (module) {
@@ -7586,6 +9147,7 @@ function App() {
             case "calendar": return React.createElement(CalendarView, { ...calProps });
             case "kanban": return React.createElement(KanbanModule, null);
             case "scales": return React.createElement(Scales, null);
+            case "ebd": return React.createElement(EbdModule, { ...calProps, setModule: setModule });
             case "cadastros": return React.createElement(Cadastros, null);
             case "profiles": return React.createElement(PerfisPermissoes, null);
             case "settings": return React.createElement(SettingsView, null);
